@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLCP Sampling QC Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #181c26; --bg3: #1e2330; --surface: #242938;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #e8eaf0; --muted: #7a8099; --accent: #4f8ef7;
+    --accept: #2dd4a0; --accept-bg: rgba(45,212,160,0.1);
+    --reject: #f87060; --reject-bg: rgba(248,112,96,0.1);
+    --warning: #f5c842; --radius: 12px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+
+  /* ── 3.4 LOADER ── */
+  #loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(15,17,23,0.8); z-index: 9999;
+    display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .spinner {
+    width: 48px; height: 48px; border: 4px solid var(--border2); border-bottom-color: var(--accent);
+    border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+  /* ── HEADER ── */
+  .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(135deg, #4f8ef7, #2dd4a0); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; }
+  .logo-text { font-size: 16px; font-weight: 600; letter-spacing: -.3px; }
+  .logo-sub { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  #status-bar { font-size: 12px; color: var(--muted); background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; }
+  #status-bar span { color: var(--accept); font-weight: 500; }
+
+  /* ── MAIN & UPLOAD ── */
+  .main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+  .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 20px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; background: var(--bg2); margin-bottom: 28px; transition: all .2s; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
+  .upload-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); background: rgba(79,142,247,0.12); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .upload-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+  .upload-sub { font-size: 12px; color: var(--muted); }
+  .upload-btn { margin-left: auto; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
+  .upload-btn:hover { opacity: .85; }
+
+  /* ── FILTERS ── */
+  .filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
+  .filter-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; }
+  .pill-group { display: flex; gap: 6px; }
+  .pill { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--muted); transition: all .15s; }
+  .pill:hover { border-color: var(--border2); color: var(--text); }
+  .pill.active-all { background: var(--surface); color: var(--text); border-color: var(--border2); }
+  .pill.active-accept { background: var(--accept-bg); color: var(--accept); border-color: rgba(45,212,160,0.3); }
+  .pill.active-reject { background: var(--reject-bg); color: var(--reject); border-color: rgba(248,112,96,0.3); }
+  
+  select.filter-select { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 20px; padding: 6px 16px; font-size: 12px; outline: none; }
+  .filter-input { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 20px; padding: 6px 16px; font-size: 12px; outline: none; transition: border-color .15s; }
+  .filter-input:focus { border-color: var(--accent); }
+  .filter-input::placeholder { color: #4a4f66; }
+  .range-group { display: flex; align-items: center; gap: 4px; background: var(--bg2); border: 1px solid var(--border2); padding: 2px 12px; border-radius: 20px; transition: border-color .15s; }
+  .range-group:focus-within { border-color: var(--accent); }
+  .range-input { background: transparent; border: none; padding: 4px 0; width: 45px; text-align: center; color: var(--text); font-size: 12px;}
+  .range-input:focus { outline: none; }
+  .range-input::placeholder { color: #4a4f66; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .clear-btn { background: transparent; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 6px 10px; transition: color .15s; }
+  .clear-btn:hover { color: var(--reject); }
+
+  /* ── CARDS & CHARTS ── */
+  .cards-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; transition: border-color .15s; }
+  .card:hover { border-color: var(--border2); }
+  .card-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; margin-bottom: 8px; }
+  .card-val { font-size: 26px; font-weight: 600; line-height: 1; }
+  .card-unit { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .card.c-accept { border-left: 3px solid var(--accept); } .card.c-accept .card-val { color: var(--accept); }
+  .card.c-reject { border-left: 3px solid var(--reject); } .card.c-reject .card-val { color: var(--reject); }
+  .card.c-accent { border-left: 3px solid var(--accent); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .stat-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .stat-box-title { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 12px; text-transform: uppercase; }
+  .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-key { color: var(--muted); }
+  .stat-val { font-weight: 600; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+  .chart-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+  .chart-legend { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .leg-line { width: 16px; height: 2px; }
+  .chart-box-wide { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel { background: var(--bg2); border: 1px solid var(--accent); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; display: none; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .detail-hole { font-size: 20px; font-weight: 700; }
+  .detail-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .meta-item { background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 14px; }
+  .meta-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .meta-val { font-size: 15px; font-weight: 600; }
+  .close-btn { background: var(--bg3); border: 1px solid var(--border2); color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+
+  /* ── TABLE ── */
+  .table-section { margin-bottom: 28px; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .section-title { font-size: 14px; font-weight: 600; }
+  .section-count { font-size: 12px; color: var(--muted); background: var(--surface); padding: 3px 10px; border-radius: 12px; }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  thead tr { background: var(--bg3); }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; transition: background .15s;}
+  th:hover { background: var(--surface); color: var(--text); }
+  th .sort-icon { font-size: 10px; margin-left: 4px; color: var(--accent); }
+  td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; transition: background .1s; }
+  tbody tr:hover td { background: rgba(79,142,247,0.06); }
+  tbody tr.selected td { background: rgba(79,142,247,0.1); }
+  .mono { font-family: 'DM Mono', monospace; font-size: 12px; }
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
+  .badge-accept { background: var(--accept-bg); color: var(--accept); }
+  .badge-reject { background: var(--reject-bg); color: var(--reject); }
+
+  .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-weight: 500; letter-spacing: 0.5px;">Processing Data...</div>
+</div>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">QC</div>
+    <div>
+      <div class="logo-text">Sampling QC Dashboard</div>
+      <div class="logo-sub">BLCP · Weight Inspection Records</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="status-bar">Loaded: <span id="record-count">16</span> records</div>
+  </div>
+</header>
+
+<main class="main">
+
+  <div class="upload-zone" id="dropzone">
+    <div class="upload-icon">📂</div>
+    <div>
+      <div class="upload-title">Update Dashboard Data</div>
+      <div class="upload-sub" id="upload-hint">Drop your .xlsx file here or click "Upload" — dashboard refreshes instantly</div>
+    </div>
+    <button class="upload-btn" id="upload-btn">Upload File</button>
+    <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+  </div>
+
+  <div class="filter-row">
+    <span class="filter-label">Filter:</span>
+    <div class="pill-group">
+      <button class="pill active-all" data-s="All">All</button>
+      <button class="pill" data-s="Accept">✓ Accept</button>
+      <button class="pill" data-s="Reject">✕ Reject</button>
+    </div>
+    <select class="filter-select" id="group-select"><option value="All">All Groups (Hole)</option></select>
+    <select class="filter-select" id="date-select"><option value="All">All Dates</option></select>
+    
+    <input type="text" id="search-hole" class="filter-input" placeholder="Search Hole (e.g. 32)...">
+
+    <div class="range-group">
+      <span style="font-size: 11px; color: var(--muted);">Level:</span>
+      <input type="number" id="level-min" class="range-input" placeholder="Min">
+      <span style="color: var(--muted);">-</span>
+      <input type="number" id="level-max" class="range-input" placeholder="Max">
+    </div>
+
+    <div class="range-group">
+      <span style="font-size: 11px; color: var(--muted);">Density:</span>
+      <input type="number" id="density-min" class="range-input" placeholder="Min">
+      <span style="color: var(--muted);">-</span>
+      <input type="number" id="density-max" class="range-input" placeholder="Max">
+    </div>
+
+    <button class="clear-btn" id="clear-btn" style="display:none">✕ Clear filters</button>
+  </div>
+
+  <div class="cards-row" id="summary-cards"></div>
+
+  <div class="stat-grid" id="stat-grid"></div>
+
+  <div class="charts-row">
+    <div class="chart-box">
+      <div class="chart-title">Trend: Accept Rate (Yield)</div>
+      <div class="chart-sub">% of accepted holes over time</div>
+      <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title" id="corr-title">Correlation: Level vs Density</div>
+      <div class="chart-sub">Does depth affect density?</div>
+      <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-box">
+      <div class="chart-title">Weight Distribution</div>
+      <div class="chart-sub">Total weight per hole (kg)</div>
+      <div style="position:relative;height:240px"><canvas id="weight-chart"></canvas></div>
+      <div class="chart-legend"><div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average</div></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Status Overview</div>
+      <div class="chart-sub">Accept vs Reject by date</div>
+      <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-box-wide">
+    <div class="chart-title">Density by Hole</div>
+    <div class="chart-sub">kg/m³ — click any bar to inspect hole details</div>
+    <div id="density-wrap" style="position:relative;width:100%">
+      <canvas id="density-chart"></canvas>
+    </div>
+    <div class="chart-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#2dd4a0"></div>Accept</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#f87060"></div>Reject</div>
+      <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average</div>
+      <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
+    </div>
+  </div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <div>
+        <div class="detail-hole" id="detail-hole">—</div>
+        <div id="detail-badge" style="margin-top:6px"></div>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-meta-grid" id="detail-meta"></div>
+    <div id="sample-section">
+      <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin-bottom:10px">Sample measurements per level</div>
+      <div style="position:relative;height:180px"><canvas id="sample-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="section-header">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="section-title">Inspection Records</div>
+        <div class="section-count" id="table-count">0 records</div>
+      </div>
+      <button onclick="exportCSV()" style="background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">📥 Export to CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="handleSort('date')">Date <span id="sort-date" class="sort-icon"></span></th>
+            <th onclick="handleSort('hole')">Hole No. <span id="sort-hole" class="sort-icon"></span></th>
+            <th onclick="handleSort('level')">Level (m) <span id="sort-level" class="sort-icon"></span></th>
+            <th onclick="handleSort('weight')">Weight (kg) <span id="sort-weight" class="sort-icon"></span></th>
+            <th onclick="handleSort('density')">Density <span id="sort-density" class="sort-icon"></span></th>
+            <th onclick="handleSort('status')">Status <span id="sort-status" class="sort-icon"></span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 4px;">
+      <div id="page-info" style="font-size: 12px; color: var(--muted);">Showing 1-10</div>
+      <div style="display: flex; gap: 6px;">
+        <button id="btn-prev" onclick="changePage(-1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Previous</button>
+        <button id="btn-next" onclick="changePage(1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Next</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+<div class="footer">BLCP Sampling QC Dashboard · Advanced Analytics Edition</div>
+
+<script>
+const DEFAULT = [
+  {date:"10 May 2026",hole:"A1-2",level:7.26,weight:66.33,density:1.1426,status:"Accept",samples:[{l:1,w:7.52},{l:2,w:8.02},{l:3,w:8.25},{l:4,w:8.97},{l:5,w:9.37},{l:6,w:9.37},{l:7,w:9.26},{l:7.26,w:5.57}]},
+  {date:"10 May 2026",hole:"A1-3",level:7.12,weight:65.46,density:1.1498,status:"Reject",samples:[{l:1,w:7.52},{l:2,w:7.73},{l:3,w:8.71},{l:4,w:8.59},{l:5,w:9.17},{l:6,w:8.35},{l:7,w:9.36},{l:7.12,w:6.03}]},
+  {date:"10 May 2026",hole:"A1-4",level:6.93,weight:61.91,density:1.1173,status:"Accept",samples:[{l:1,w:8.06},{l:2,w:8.68},{l:3,w:8.45},{l:4,w:8.75},{l:5,w:8.34},{l:6,w:8.99},{l:6.93,w:10.64}]},
+  {date:"10 May 2026",hole:"A1-32",level:11,weight:100.95,density:1.1477,status:"Reject",samples:[{l:1,w:8.41},{l:2,w:8.1},{l:3,w:8.06},{l:4,w:8.41},{l:5,w:9.46},{l:6,w:9.54},{l:7,w:9.3},{l:8,w:9.84},{l:9,w:9.93},{l:10,w:10.07},{l:11,w:9.83}]},
+  {date:"10 May 2026",hole:"A1-33",level:11.03,weight:108.89,density:1.2346,status:"Reject",samples:[{l:1,w:7.97},{l:2,w:8.21},{l:3,w:8.62},{l:4,w:8.87},{l:5,w:10.13},{l:6,w:9.59},{l:7,w:8.75},{l:8,w:10.98},{l:9,w:9.96},{l:10,w:10.01},{l:11,w:10.52},{l:11.03,w:5.28}]},
+  {date:"11 May 2026",hole:"A1-5",level:6.5,weight:59.23,density:1.1396,status:"Reject",samples:[{l:1,w:6.69},{l:2,w:7.99},{l:3,w:9.49},{l:4,w:9.44},{l:5,w:10.13},{l:6,w:10.07},{l:6.5,w:5.42},{l:6.96,w:9.49}]},
+  {date:"11 May 2026",hole:"A1-6",level:6.7,weight:68.08,density:1.2708,status:"Reject",samples:[{l:1,w:8.62},{l:2,w:8.93},{l:3,w:9.42},{l:4,w:9.26},{l:5,w:9.7},{l:6,w:9.67},{l:6.5,w:3.99},{l:6.7,w:8.49}]},
+  {date:"11 May 2026",hole:"A1-34",level:10.95,weight:101.92,density:1.1641,status:"Reject",samples:[{l:1,w:8.3},{l:2,w:8.08},{l:3,w:8.78},{l:4,w:8.54},{l:5,w:9.29},{l:6,w:10},{l:7,w:9.85},{l:8,w:9.9},{l:9,w:9.64},{l:10,w:8.85},{l:10.95,w:10.69}]},
+  {date:"11 May 2026",hole:"A1-35",level:10.915,weight:116.19,density:1.3313,status:"Reject",samples:[]},
+  {date:"11 May 2026",hole:"A1-36",level:10.94,weight:117.57,density:1.344,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-37",level:11.1,weight:112.16,density:1.2637,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-38",level:11.04,weight:108.19,density:1.2256,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-7",level:6.8,weight:57.81,density:1.0632,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-8",level:6.89,weight:62.5,density:1.1345,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-39",level:10.97,weight:113.83,density:1.2977,status:"Reject",samples:[]},
+  {date:"12 May 2026",hole:"A1-9",level:6.86,weight:65.95,density:1.2023,status:"Reject",samples:[]}
+];
+
+let allData = DEFAULT.slice();
+let statusF = "All", dateF = "All", groupF = "All", selectedHole = null;
+let searchF = "", levelMinF = "", levelMaxF = "", densityMinF = "", densityMaxF = "";
+let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
+let chartDensity = null, chartWeight = null, chartStatus = null, chartSample = null;
+let chartTrend = null, chartScatter = null;
+
+function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+
+function parseXLSX(buf) {
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  // หา Sheet ที่ชื่อมีคำว่า Summary หรือใช้ชีตแรกสุด
+  let targetSheet = wb.SheetNames.find(n => n.toLowerCase().includes("summary")) || wb.SheetNames[0];
+  const ws = wb.Sheets[targetSheet];
+  if (!ws) { alert("No valid sheet found in this file."); return null; }
+  
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[2]) continue;
+    let date = ""; const dv = r[1];
+    if (dv instanceof Date) date = dv.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    else if (typeof dv === "number") date = new Date(Math.round((dv - 25569) * 86400 * 1000)).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    else date = String(dv || "");
+    
+    let samples = [];
+    const detWs = wb.Sheets[String(r[2])];
+    if (detWs) {
+      const dRows = XLSX.utils.sheet_to_json(detWs, { header: 1, defval: null });
+      for (let j = 3; j < dRows.length; j++) {
+        if (typeof dRows[j][2] === "number" && typeof dRows[j][3] === "number") {
+          samples.push({ l: +dRows[j][2].toFixed(3), w: +dRows[j][3].toFixed(3) });
+        }
+      }
+    }
+    out.push({ date, hole: String(r[2]), level: +(r[3] || 0).toFixed(3), weight: +(r[4] || 0).toFixed(3), density: +(r[5] || 0).toFixed(4), status: String(r[6] || ""), samples });
+  }
+  return out;
+}
+
+function calcStats(arr, key) {
+  if (!arr.length) return { avg: 0, sd: 0, min: 0, max: 0 };
+  const v = arr.map(r => r[key]);
+  const avg = v.reduce((a, b) => a + b, 0) / v.length;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - avg) ** 2, 0) / v.length);
+  return { avg: +avg.toFixed(4), sd: +sd.toFixed(4), min: +Math.min(...v).toFixed(4), max: +Math.max(...v).toFixed(4) };
+}
+
+function calcCorrelation(arr, keyX, keyY) {
+  if (arr.length < 2) return 0;
+  const x = arr.map(r => r[keyX]), y = arr.map(r => r[keyY]), n = arr.length;
+  const sumX = x.reduce((a,b)=>a+b,0), sumY = y.reduce((a,b)=>a+b,0);
+  const sumXY = arr.reduce((sum, r) => sum + (r[keyX] * r[keyY]), 0);
+  const sumX2 = x.reduce((a,b)=>a+(b*b),0), sumY2 = y.reduce((a,b)=>a+(b*b),0);
+  const den = Math.sqrt((n * sumX2 - sumX*sumX) * (n * sumY2 - sumY*sumY));
+  return den === 0 ? 0 : ((n * sumXY) - (sumX * sumY)) / den;
+}
+
+function getFiltered() {
+  return allData.filter(r => {
+    const prefix = r.hole.includes('-') ? r.hole.split('-')[0] : r.hole;
+    const matchStatus = (statusF === "All" || r.status === statusF);
+    const matchDate = (dateF === "All" || r.date === dateF);
+    const matchGroup = (groupF === "All" || prefix === groupF);
+    const matchSearch = r.hole.toLowerCase().includes(searchF.toLowerCase());
+    const matchLevel = (levelMinF === "" || r.level >= Number(levelMinF)) && (levelMaxF === "" || r.level <= Number(levelMaxF));
+    const matchDensity = (densityMinF === "" || r.density >= Number(densityMinF)) && (densityMaxF === "" || r.density <= Number(densityMaxF));
+    return matchStatus && matchDate && matchGroup && matchSearch && matchLevel && matchDensity;
+  });
+}
+
+function renderSummary(f) {
+  const acc = f.filter(r => r.status === "Accept").length;
+  const rate = f.length ? (acc / f.length * 100).toFixed(1) : 0;
+  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
+
+  document.getElementById("summary-cards").innerHTML = `
+    <div class="card"><div class="card-label">Total Holes</div><div class="card-val">${f.length}</div></div>
+    <div class="card c-accept"><div class="card-label">Accept</div><div class="card-val">${acc}<span class="card-unit">${rate}%</span></div></div>
+    <div class="card c-reject"><div class="card-label">Reject</div><div class="card-val">${f.length - acc}<span class="card-unit">${f.length ? (100 - rate).toFixed(1) : 0}%</span></div></div>
+    <div class="card c-accent"><div class="card-label">Avg Density</div><div class="card-val">${ds.avg}<span class="card-unit">kg/m³</span></div></div>
+    <div class="card"><div class="card-label">Avg Weight</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label">Avg Level</div><div class="card-val">${ls.avg}<span class="card-unit">m</span></div></div>
+  `;
+
+  document.getElementById("stat-grid").innerHTML = [
+    { title: "Density (kg/m³)", s: ds }, { title: "Total Weight (kg)", s: ws }, { title: "Level Depth (m)", s: ls }
+  ].map(({ title, s }) => `
+    <div class="stat-box">
+      <div class="stat-box-title">${title}</div>
+      <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${s.avg}</span></div>
+      <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${s.sd}</span></div>
+      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${s.min}</span></div>
+      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${s.max}</span></div>
+    </div>
+  `).join("");
+}
+
+function gc(id) { return document.getElementById(id).getContext("2d"); }
+const GRID = "rgba(255,255,255,0.05)", TICK = "#7a8099";
+
+function renderCharts(f) {
+  const ds = calcStats(f, "density"), ws = calcStats(f, "weight");
+
+  /* DENSITY CHART */
+  document.getElementById("density-wrap").style.height = Math.max(f.length * 38 + 50, 160) + "px";
+  if (chartDensity) chartDensity.destroy();
+  chartDensity = new Chart(gc("density-chart"), {
+    type: "bar",
+    data: {
+      labels: f.map(r => r.hole),
+      datasets: [
+        { label: "Density", data: f.map(r => r.density), backgroundColor: f.map(r => r.status === "Accept" ? "#2dd4a0" : "#f87060"), borderRadius: 3, borderSkipped: "left" },
+        { label: "Avg", data: f.map(() => ds.avg), type: "line", borderColor: "#4f8ef7", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, fill: false },
+        { label: "+1 SD", data: f.map(() => ds.avg + ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false },
+        { label: "-1 SD", data: f.map(() => ds.avg - ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: "#1e2330", titleColor: "#e8eaf0", bodyColor: "#7a8099" } },
+      scales: { x: { grid: { color: GRID }, ticks: { color: TICK } }, y: { grid: { display: false }, ticks: { color: TICK } } },
+      onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); }
+    }
+  });
+
+  /* WEIGHT CHART */
+  if (chartWeight) chartWeight.destroy();
+  chartWeight = new Chart(gc("weight-chart"), {
+    type: "bar",
+    data: { labels: f.map(r => r.hole), datasets: [ { label: "Weight", data: f.map(r => r.weight), backgroundColor: "#4f8ef7cc" }, { label: "Avg", data: f.map(() => ws.avg), type: "line", borderColor: "#4f8ef7", pointRadius: 0 } ] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { grid: { color: GRID }, ticks: { color: TICK } } } }
+  });
+
+  /* STATUS CHART */
+  const dates = [...new Set(f.map(r => r.date))].sort((a,b) => new Date(a) - new Date(b));
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = new Chart(gc("status-chart"), {
+    type: "bar",
+    data: { labels: dates, datasets: [ { label: "Accept", data: dates.map(d => f.filter(r => r.date === d && r.status === "Accept").length), backgroundColor: "#2dd4a0cc" }, { label: "Reject", data: dates.map(d => f.filter(r => r.date === d && r.status === "Reject").length), backgroundColor: "#f87060cc" } ] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false }, ticks: { color: TICK } }, y: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } } } }
+  });
+
+  /* TREND CHART */
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart(gc("trend-chart"), {
+    type: "line",
+    data: { labels: dates, datasets: [{ label: "% Accept", data: dates.map(d => { const dF = f.filter(r => r.date === d); return dF.length ? (dF.filter(r => r.status === "Accept").length / dF.length) * 100 : 0; }), borderColor: "#2dd4a0", backgroundColor: "rgba(45,212,160,0.1)", fill: true }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { min: 0, max: 100, grid: { color: GRID }, ticks: { color: TICK } } } }
+  });
+
+  /* SCATTER CHART */
+  const rValue = calcCorrelation(f, "level", "density");
+  document.getElementById("corr-title").innerHTML = `Correlation <span style="font-size:11px; color:#7a8099">(r = ${rValue.toFixed(2)})</span>`;
+  if (chartScatter) chartScatter.destroy();
+  chartScatter = new Chart(gc("scatter-chart"), {
+    type: "scatter",
+    data: { datasets: [{ data: f.map(r => ({ x: r.level, y: r.density, raw: r })), backgroundColor: f.map(r => r.status === "Accept" ? "#2dd4a0" : "#f87060") }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Level (m)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } }, y: { title: { display: true, text: "Density", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } } }
+  });
+}
+
+function handleSort(col) {
+  if (sortCol === col) sortDesc = !sortDesc; else { sortCol = col; sortDesc = false; }
+  document.querySelectorAll(".sort-icon").forEach(el => el.innerHTML = "");
+  document.getElementById(`sort-${col}`).innerHTML = sortDesc ? "▼" : "▲";
+  curPage = 1; renderTable(getFiltered());
+}
+
+function changePage(step) { curPage += step; renderTable(getFiltered()); }
+
+function renderTable(f) {
+  document.getElementById("table-count").textContent = f.length + " records";
+  let sortedF = [...f];
+  if (sortCol) {
+    sortedF.sort((a, b) => {
+      let vA = a[sortCol], vB = b[sortCol];
+      if (sortCol === 'date') { vA = new Date(vA).getTime(); vB = new Date(vB).getTime(); }
+      if (typeof vA === "string") return sortDesc ? vB.localeCompare(vA) : vA.localeCompare(vB);
+      return sortDesc ? vB - vA : vA - vB;
+    });
+  }
+  const totalPages = Math.ceil(sortedF.length / rowsPerPage) || 1;
+  if (curPage > totalPages) curPage = totalPages;
+  const startIdx = (curPage - 1) * rowsPerPage;
+  const pagedData = sortedF.slice(startIdx, startIdx + rowsPerPage);
+
+  document.getElementById("table-body").innerHTML = pagedData.map(r => `
+    <tr class="${selectedHole === r.hole ? "selected" : ""}" onclick="selectHole('${r.hole}')">
+      <td>${r.date}</td> <td style="font-weight:600">${r.hole}</td> <td class="mono">${r.level}</td>
+      <td class="mono">${r.weight.toFixed(2)}</td> <td class="mono">${r.density}</td>
+      <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+    </tr>`).join("");
+  
+  document.getElementById("page-info").textContent = `Showing ${f.length ? startIdx + 1 : 0}-${Math.min(startIdx + rowsPerPage, f.length)} of ${f.length}`;
+  document.getElementById("btn-prev").disabled = curPage === 1; document.getElementById("btn-next").disabled = curPage === totalPages || f.length === 0;
+}
+
+function exportCSV() {
+  const f = getFiltered(); if (!f.length) return alert("No data to export.");
+  let csv = "Date,Hole No.,Level (m),Weight (kg),Density,Status\n";
+  f.forEach(r => csv += `"${r.date}","${r.hole}",${r.level},${r.weight},${r.density},"${r.status}"\n`);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = "QC_Data.csv"; a.click();
+}
+
+function selectHole(h) {
+  selectedHole = h; renderTable(getFiltered());
+  if (h) {
+    const rec = allData.find(r => r.hole === h);
+    if (rec) {
+      document.getElementById("detail-hole").textContent = rec.hole;
+      document.getElementById("detail-badge").innerHTML = `<span class="badge badge-${rec.status.toLowerCase()}">${rec.status}</span>`;
+      document.getElementById("detail-meta").innerHTML = [["Date", rec.date], ["Level Depth", rec.level + " m"], ["Total Weight", rec.weight + " kg"], ["Density", rec.density + " kg/m³"]].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
+      
+      const sampleSec = document.getElementById("sample-section");
+      if (rec.samples.length > 0) {
+        sampleSec.style.display = "block";
+        if (chartSample) chartSample.destroy();
+        chartSample = new Chart(gc("sample-chart"), { type: "bar", data: { labels: rec.samples.map(s => s.l), datasets: [{ data: rec.samples.map(s => s.w), backgroundColor: "#4f8ef7cc" }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { grid: { color: GRID }, ticks: { color: TICK } } } } });
+      } else { sampleSec.style.display = "none"; }
+      document.getElementById("detail-panel").style.display = "block";
+    }
+  } else { document.getElementById("detail-panel").style.display = "none"; }
+}
+function closeDetail() { selectHole(null); }
+
+function populateGroups() { document.getElementById("group-select").innerHTML = ["All", ...new Set(allData.map(r => r.hole.includes('-') ? r.hole.split('-')[0] : r.hole))].sort().map(p => `<option value="${p}"${p === groupF ? " selected" : ""}>${p === "All" ? "All Groups" : p}</option>`).join(""); }
+function populateDates() { document.getElementById("date-select").innerHTML = ["All", ...new Set(allData.map(r => r.date))].map(d => `<option value="${d}"${d === dateF ? " selected" : ""}>${d === "All" ? "All Dates" : d}</option>`).join(""); }
+
+function render() {
+  const f = getFiltered(); renderSummary(f); renderCharts(f); renderTable(f);
+  document.getElementById("record-count").textContent = allData.length;
+  document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF) ? "" : "none";
+  document.querySelectorAll(".pill-group .pill").forEach(b => b.className = "pill" + (b.dataset.s === statusF ? " active-" + statusF.toLowerCase() : ""));
+}
+
+function loadFile(file) {
+  showLoading();
+  setTimeout(() => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const parsed = parseXLSX(new Uint8Array(e.target.result));
+      if (parsed && parsed.length > 0) {
+        allData = parsed; selectedHole = null; closeDetail();
+        statusF = "All"; dateF = "All"; groupF = "All"; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
+        document.getElementById("search-hole").value = ""; document.querySelectorAll(".range-input").forEach(i => i.value = "");
+        curPage = 1; sortCol = ""; document.querySelectorAll(".sort-icon").forEach(el => el.innerHTML = "");
+        populateGroups(); populateDates(); render();
+      }
+      hideLoading();
+    };
+    reader.readAsArrayBuffer(file);
+  }, 100);
+}
+
+const dz = document.getElementById("dropzone"), fi = document.getElementById("file-input");
+document.getElementById("upload-btn").addEventListener("click", e => { e.stopPropagation(); fi.click(); });
+dz.addEventListener("click", () => fi.click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("drag")); /* 🟢 แก้ไข Syntax Error ตรงนี้แล้ว 🟢 */
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("drag"); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+fi.addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+document.querySelectorAll(".pill-group .pill").forEach(b => b.addEventListener("click", () => { statusF = b.dataset.s; curPage = 1; render(); }));
+document.getElementById("group-select").addEventListener("change", e => { groupF = e.target.value; curPage = 1; render(); });
+document.getElementById("date-select").addEventListener("change", e => { dateF = e.target.value; curPage = 1; render(); });
+document.getElementById("search-hole").addEventListener("input", e => { searchF = e.target.value; curPage = 1; render(); });
+document.getElementById("level-min").addEventListener("input", e => { levelMinF = e.target.value; curPage = 1; render(); });
+document.getElementById("level-max").addEventListener("input", e => { levelMaxF = e.target.value; curPage = 1; render(); });
+document.getElementById("density-min").addEventListener("input", e => { densityMinF = e.target.value; curPage = 1; render(); });
+document.getElementById("density-max").addEventListener("input", e => { densityMaxF = e.target.value; curPage = 1; render(); });
+document.getElementById("clear-btn").addEventListener("click", () => {
+  statusF = "All"; dateF = "All"; groupF = "All"; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
+  document.getElementById("search-hole").value = ""; document.querySelectorAll(".range-input").forEach(i => i.value = "");
+  curPage = 1; populateGroups(); populateDates(); render();
+});
+
+populateGroups(); populateDates(); render();
+</script>
+</body>
+</html>
