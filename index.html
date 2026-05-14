@@ -222,6 +222,14 @@
       <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
     </div>
     <div class="chart-box">
+      <div class="chart-title">Status Overview</div>
+      <div class="chart-sub">Accept vs Reject samples by date</div>
+      <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-box">
       <div class="chart-title" id="corr-title">Correlation: Depth vs Density</div>
       <div class="chart-sub">Does depth affect density? (Based on filtered samples)</div>
       <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
@@ -231,6 +239,12 @@
       <div class="chart-sub">Histogram of sample densities</div>
       <div style="position:relative;height:240px"><canvas id="hist-chart"></canvas></div>
     </div>
+  </div>
+
+  <div class="chart-box-wide" style="margin-bottom: 24px;">
+    <div class="chart-title">Weight Distribution</div>
+    <div class="chart-sub">Total weight per hole (kg) - Check for missing weight</div>
+    <div style="position:relative;height:260px;width:100%"><canvas id="weight-chart"></canvas></div>
   </div>
 
   <div class="chart-box-wide">
@@ -300,8 +314,7 @@ let allData = [];
 let statusF = "All", dateF = "All", groupF = "All", holeF = "All", selectedHole = null;
 let searchF = "", levelMinF = "", levelMaxF = "", densityMinF = "", densityMaxF = "";
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
-let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null;
-
+let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null, chartStatus = null, chartWeight = null;
 function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
@@ -607,6 +620,44 @@ function renderCharts(f) {
       return tot ? (acc/tot)*100 : 0; 
     }), borderColor: "#2dd4a0", backgroundColor: "rgba(45,212,160,0.1)", fill: true }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { min: 0, max: 100, grid: { color: GRID }, ticks: { color: TICK } } } }
+  });
+
+  /* 🟢 STATUS OVERVIEW CHART (กราฟแท่ง Accept vs Reject แบบ Stacked) */
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = new Chart(gc("status-chart"), {
+    type: "bar",
+    data: {
+      labels: dates,
+      datasets: [
+        { label: "Accept", data: dates.map(d => f.filter(r=>r.date===d).reduce((a,b)=>a+b.accCount,0)), backgroundColor: "#2dd4a0", stack: "Stack 0" },
+        { label: "Reject", data: dates.map(d => f.filter(r=>r.date===d).reduce((a,b)=>a+b.rejCount,0)), backgroundColor: "#f87060", stack: "Stack 0" }
+      ]
+    },
+    options: { 
+      responsive: true, maintainAspectRatio: false, 
+      plugins: { legend: { display: true, position: 'top', labels: {color: TICK, boxWidth: 12} } }, 
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { color: TICK } }, y: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } } } 
+    }
+  });
+
+  /* 🟢 WEIGHT DISTRIBUTION CHART (กราฟแท่งน้ำหนักรวมรายหลุม + เส้นค่าเฉลี่ย) */
+  const ws = calcStats(f, "weight");
+  if (chartWeight) chartWeight.destroy();
+  chartWeight = new Chart(gc("weight-chart"), {
+    type: "bar",
+    data: {
+      labels: f.map(r => r.hole),
+      datasets: [
+        { label: "Total Weight (kg)", data: f.map(r => r.weight), backgroundColor: "#4f8ef7", borderRadius: 4, order: 2 },
+        { label: "Average", data: f.map(() => ws.avg), type: "line", borderColor: "#4f8ef7", borderWidth: 2, pointRadius: 0, fill: false, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45 } }, y: { title: { display: true, text: "Weight (kg)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } },
+      onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); }
+    }
   });
 
   /* SCATTER CHART */
