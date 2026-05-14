@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BLCP Sampling QC Dashboard</title>
+<title>BLCP Sampling QC Dashboard V6</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,16 +21,9 @@
   html { font-size: 14px; }
   body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
 
-  /* ── 3.4 LOADER ── */
-  #loading-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(15,17,23,0.8); z-index: 9999;
-    display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(4px);
-  }
-  .spinner {
-    width: 48px; height: 48px; border: 4px solid var(--border2); border-bottom-color: var(--accent);
-    border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; margin-bottom: 16px;
-  }
+  /* ── LOADER ── */
+  #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,17,23,0.8); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .spinner { width: 48px; height: 48px; border: 4px solid var(--border2); border-bottom-color: var(--accent); border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; margin-bottom: 16px; }
   @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
   /* ── HEADER ── */
@@ -45,13 +38,22 @@
 
   /* ── MAIN & UPLOAD ── */
   .main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
-  .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 20px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; background: var(--bg2); margin-bottom: 28px; transition: all .2s; }
+  .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 20px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; background: var(--bg2); margin-bottom: 24px; transition: all .2s; }
   .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
   .upload-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); background: rgba(79,142,247,0.12); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
   .upload-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
   .upload-sub { font-size: 12px; color: var(--muted); }
   .upload-btn { margin-left: auto; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
   .upload-btn:hover { opacity: .85; }
+
+  /* ── PROGRESS BAR ── */
+  .progress-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 28px; }
+  .prog-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+  .prog-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .prog-sub { font-size: 12px; color: var(--muted); }
+  .prog-val { font-size: 28px; font-weight: 700; color: var(--accept); line-height: 1; }
+  .prog-track { background: var(--bg3); border-radius: 12px; height: 16px; width: 100%; overflow: hidden; position: relative; }
+  #prog-fill { background: linear-gradient(90deg, #2dd4a0, #20b285); height: 100%; width: 0%; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
 
   /* ── FILTERS ── */
   .filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
@@ -64,46 +66,34 @@
   .pill.active-reject { background: var(--reject-bg); color: var(--reject); border-color: rgba(248,112,96,0.3); }
   
   select.filter-select { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 20px; padding: 6px 16px; font-size: 12px; outline: none; }
-  .filter-input { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 20px; padding: 6px 16px; font-size: 12px; outline: none; transition: border-color .15s; }
-  .filter-input:focus { border-color: var(--accent); }
-  .filter-input::placeholder { color: #4a4f66; }
-  .range-group { display: flex; align-items: center; gap: 4px; background: var(--bg2); border: 1px solid var(--border2); padding: 2px 12px; border-radius: 20px; transition: border-color .15s; }
-  .range-group:focus-within { border-color: var(--accent); }
+  .filter-input { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); border-radius: 20px; padding: 6px 16px; font-size: 12px; outline: none; transition: border-color .15s; width: 140px; }
+  .range-group { display: flex; align-items: center; gap: 4px; background: var(--bg2); border: 1px solid var(--border2); padding: 2px 12px; border-radius: 20px; }
   .range-input { background: transparent; border: none; padding: 4px 0; width: 45px; text-align: center; color: var(--text); font-size: 12px;}
   .range-input:focus { outline: none; }
-  .range-input::placeholder { color: #4a4f66; }
   input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .clear-btn { background: transparent; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 6px 10px; transition: color .15s; }
   .clear-btn:hover { color: var(--reject); }
 
   /* ── CARDS & CHARTS ── */
   .cards-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; transition: border-color .15s; }
-  .card:hover { border-color: var(--border2); }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
   .card-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; margin-bottom: 8px; }
   .card-val { font-size: 26px; font-weight: 600; line-height: 1; }
   .card-unit { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
-  .card.c-accept { border-left: 3px solid var(--accept); } .card.c-accept .card-val { color: var(--accept); }
-  .card.c-reject { border-left: 3px solid var(--reject); } .card.c-reject .card-val { color: var(--reject); }
-  .card.c-accent { border-left: 3px solid var(--accent); }
-
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
   .stat-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
   .stat-box-title { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 12px; text-transform: uppercase; }
   .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .stat-row:last-child { border-bottom: none; }
-  .stat-key { color: var(--muted); }
-  .stat-val { font-weight: 600; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
-
-  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-  @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+  
+  /* 🟢 แก้ไข charts-row ให้เรียงตัวอัตโนมัติ 3 คอลัมน์ */
+  .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .chart-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-  .chart-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
   .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
   .chart-legend { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
   .leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
   .leg-dot { width: 8px; height: 8px; border-radius: 2px; }
-  .leg-line { width: 16px; height: 2px; }
   .chart-box-wide { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
 
   /* ── DETAIL PANEL ── */
@@ -120,22 +110,21 @@
   .table-section { margin-bottom: 28px; }
   .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .section-title { font-size: 14px; font-weight: 600; }
-  .section-count { font-size: 12px; color: var(--muted); background: var(--surface); padding: 3px 10px; border-radius: 12px; }
   .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
-  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  table { width: 100%; border-collapse: collapse; min-width: 600px; }
   thead tr { background: var(--bg3); }
-  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; transition: background .15s;}
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--border); cursor: pointer; }
   th:hover { background: var(--surface); color: var(--text); }
-  th .sort-icon { font-size: 10px; margin-left: 4px; color: var(--accent); }
   td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
   tr:last-child td { border-bottom: none; }
   tbody tr { cursor: pointer; transition: background .1s; }
   tbody tr:hover td { background: rgba(79,142,247,0.06); }
   tbody tr.selected td { background: rgba(79,142,247,0.1); }
   .mono { font-family: 'DM Mono', monospace; font-size: 12px; }
-  .badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
-  .badge-accept { background: var(--accept-bg); color: var(--accept); }
-  .badge-reject { background: var(--reject-bg); color: var(--reject); }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600; margin-right: 4px; display: inline-block; }
+  .badge-accept { background: var(--accept-bg); color: var(--accept); border: 1px solid rgba(45,212,160,0.2); }
+  .badge-reject { background: var(--reject-bg); color: var(--reject); border: 1px solid rgba(248,112,96,0.2); }
+  .badge-mixed { background: rgba(245, 200, 66, 0.1); color: var(--warning); border: 1px solid rgba(245, 200, 66, 0.2); }
 
   .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -155,11 +144,11 @@
     <div class="logo-mark">QC</div>
     <div>
       <div class="logo-text">Sampling QC Dashboard</div>
-      <div class="logo-sub">BLCP · Weight Inspection Records</div>
+      <div class="logo-sub">BLCP · Deep Drilling Analytics</div>
     </div>
   </div>
   <div class="header-right">
-    <div id="status-bar">Loaded: <span id="record-count">16</span> records</div>
+    <div id="status-bar">Loaded: <span id="record-count">0</span> Holes</div>
   </div>
 </header>
 
@@ -169,10 +158,24 @@
     <div class="upload-icon">📂</div>
     <div>
       <div class="upload-title">Update Dashboard Data</div>
-      <div class="upload-sub" id="upload-hint">Drop your .xlsx file here or click "Upload" — dashboard refreshes instantly</div>
+      <div class="upload-sub" id="upload-hint">Drop your .xlsx file (Drilling Data) here to compile all sheets automatically</div>
     </div>
     <button class="upload-btn" id="upload-btn">Upload File</button>
     <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+  </div>
+
+  <div class="progress-card">
+    <div class="prog-header">
+      <div>
+        <div class="prog-title">🎯 Sample Acceptance Progress</div>
+        <div class="prog-sub">Tracking total accepted samples against the project target of 913</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="prog-val" id="prog-val-text">0</span>
+        <span style="font-size: 12px; color: var(--muted); margin-left: 4px;">/ 913 Samples (<span id="prog-pct">0</span>%)</span>
+      </div>
+    </div>
+    <div class="prog-track"><div id="prog-fill"></div></div>
   </div>
 
   <div class="filter-row">
@@ -182,13 +185,16 @@
       <button class="pill" data-s="Accept">✓ Accept</button>
       <button class="pill" data-s="Reject">✕ Reject</button>
     </div>
-    <select class="filter-select" id="group-select"><option value="All">All Groups (Hole)</option></select>
+    <select class="filter-select" id="group-select"><option value="All">All Piles</option></select>
+    
+    <select class="filter-select" id="hole-select"><option value="All">All Holes</option></select>
+    
     <select class="filter-select" id="date-select"><option value="All">All Dates</option></select>
     
-    <input type="text" id="search-hole" class="filter-input" placeholder="Search Hole (e.g. 32)...">
+    <input type="text" id="search-hole" class="filter-input" placeholder="Search Hole (e.g. 16)...">
 
-    <div class="range-group">
-      <span style="font-size: 11px; color: var(--muted);">Level:</span>
+    <div class="range-group" title="Filters data to show only samples within this depth range">
+      <span style="font-size: 11px; color: var(--muted);">Depth (m):</span>
       <input type="number" id="level-min" class="range-input" placeholder="Min">
       <span style="color: var(--muted);">-</span>
       <input type="number" id="level-max" class="range-input" placeholder="Max">
@@ -202,6 +208,7 @@
     </div>
 
     <button class="clear-btn" id="clear-btn" style="display:none">✕ Clear filters</button>
+    <button class="clear-btn" id="clear-db-btn" style="color: var(--reject); border: 1px solid var(--reject-bg); display: none;">🗑️ Clear Data</button>
   </div>
 
   <div class="cards-row" id="summary-cards"></div>
@@ -211,40 +218,29 @@
   <div class="charts-row">
     <div class="chart-box">
       <div class="chart-title">Trend: Accept Rate (Yield)</div>
-      <div class="chart-sub">% of accepted holes over time</div>
+      <div class="chart-sub">% of accepted SAMPLES over time</div>
       <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
     </div>
     <div class="chart-box">
-      <div class="chart-title" id="corr-title">Correlation: Level vs Density</div>
-      <div class="chart-sub">Does depth affect density?</div>
+      <div class="chart-title" id="corr-title">Correlation: Depth vs Density</div>
+      <div class="chart-sub">Does depth affect density? (Based on filtered samples)</div>
       <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
     </div>
-  </div>
-
-  <div class="charts-row">
     <div class="chart-box">
-      <div class="chart-title">Weight Distribution</div>
-      <div class="chart-sub">Total weight per hole (kg)</div>
-      <div style="position:relative;height:240px"><canvas id="weight-chart"></canvas></div>
-      <div class="chart-legend"><div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average</div></div>
-    </div>
-    <div class="chart-box">
-      <div class="chart-title">Status Overview</div>
-      <div class="chart-sub">Accept vs Reject by date</div>
-      <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
+      <div class="chart-title">Data Distribution: Density</div>
+      <div class="chart-sub">Histogram of sample densities</div>
+      <div style="position:relative;height:240px"><canvas id="hist-chart"></canvas></div>
     </div>
   </div>
 
   <div class="chart-box-wide">
-    <div class="chart-title">Density by Hole</div>
-    <div class="chart-sub">kg/m³ — click any bar to inspect hole details</div>
-    <div id="density-wrap" style="position:relative;width:100%">
-      <canvas id="density-chart"></canvas>
-    </div>
+    <div class="chart-title">Density by Hole (Average of valid samples)</div>
+    <div class="chart-sub">Check for outliers outside the warning lines (±1 SD)</div>
+    <div id="density-wrap" style="position:relative;width:100%"><canvas id="density-chart"></canvas></div>
     <div class="chart-legend">
-      <div class="leg-item"><div class="leg-dot" style="background:#2dd4a0"></div>Accept</div>
-      <div class="leg-item"><div class="leg-dot" style="background:#f87060"></div>Reject</div>
-      <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#2dd4a0"></div>Accept Proportion</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#f87060"></div>Reject Proportion</div>
+      <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average Density</div>
       <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
     </div>
   </div>
@@ -259,7 +255,7 @@
     </div>
     <div class="detail-meta-grid" id="detail-meta"></div>
     <div id="sample-section">
-      <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin-bottom:10px">Sample measurements per level</div>
+      <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin-bottom:10px">Sample Measurements (Weight vs Depth)</div>
       <div style="position:relative;height:180px"><canvas id="sample-chart"></canvas></div>
     </div>
   </div>
@@ -267,8 +263,7 @@
   <div class="table-section">
     <div class="section-header">
       <div style="display: flex; align-items: center; gap: 12px;">
-        <div class="section-title">Inspection Records</div>
-        <div class="section-count" id="table-count">0 records</div>
+        <div class="section-title">Hole Aggregations (Based on Filtered Samples)</div>
       </div>
       <button onclick="exportCSV()" style="background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">📥 Export to CSV</button>
     </div>
@@ -276,12 +271,12 @@
       <table>
         <thead>
           <tr>
-            <th onclick="handleSort('date')">Date <span id="sort-date" class="sort-icon"></span></th>
-            <th onclick="handleSort('hole')">Hole No. <span id="sort-hole" class="sort-icon"></span></th>
-            <th onclick="handleSort('level')">Level (m) <span id="sort-level" class="sort-icon"></span></th>
-            <th onclick="handleSort('weight')">Weight (kg) <span id="sort-weight" class="sort-icon"></span></th>
-            <th onclick="handleSort('density')">Density <span id="sort-density" class="sort-icon"></span></th>
-            <th onclick="handleSort('status')">Status <span id="sort-status" class="sort-icon"></span></th>
+            <th onclick="handleSort('date')">Date <span id="sort-date"></span></th>
+            <th onclick="handleSort('hole')">Hole No. <span id="sort-hole"></span></th>
+            <th onclick="handleSort('level')">Max Filtered Depth <span id="sort-level"></span></th>
+            <th onclick="handleSort('weight')">Total Wt. (kg) <span id="sort-weight"></span></th>
+            <th onclick="handleSort('density')">Avg Density <span id="sort-density"></span></th>
+            <th onclick="handleSort('accCount')">Samples Status <span id="sort-accCount"></span></th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -297,68 +292,166 @@
   </div>
 
 </main>
-<div class="footer">BLCP Sampling QC Dashboard · Advanced Analytics Edition</div>
+<div class="footer">BLCP Sampling QC Dashboard V7 · IndexedDB Persistence & Histogram</div>
 
 <script>
-const DEFAULT = [
-  {date:"10 May 2026",hole:"A1-2",level:7.26,weight:66.33,density:1.1426,status:"Accept",samples:[{l:1,w:7.52},{l:2,w:8.02},{l:3,w:8.25},{l:4,w:8.97},{l:5,w:9.37},{l:6,w:9.37},{l:7,w:9.26},{l:7.26,w:5.57}]},
-  {date:"10 May 2026",hole:"A1-3",level:7.12,weight:65.46,density:1.1498,status:"Reject",samples:[{l:1,w:7.52},{l:2,w:7.73},{l:3,w:8.71},{l:4,w:8.59},{l:5,w:9.17},{l:6,w:8.35},{l:7,w:9.36},{l:7.12,w:6.03}]},
-  {date:"10 May 2026",hole:"A1-4",level:6.93,weight:61.91,density:1.1173,status:"Accept",samples:[{l:1,w:8.06},{l:2,w:8.68},{l:3,w:8.45},{l:4,w:8.75},{l:5,w:8.34},{l:6,w:8.99},{l:6.93,w:10.64}]},
-  {date:"10 May 2026",hole:"A1-32",level:11,weight:100.95,density:1.1477,status:"Reject",samples:[{l:1,w:8.41},{l:2,w:8.1},{l:3,w:8.06},{l:4,w:8.41},{l:5,w:9.46},{l:6,w:9.54},{l:7,w:9.3},{l:8,w:9.84},{l:9,w:9.93},{l:10,w:10.07},{l:11,w:9.83}]},
-  {date:"10 May 2026",hole:"A1-33",level:11.03,weight:108.89,density:1.2346,status:"Reject",samples:[{l:1,w:7.97},{l:2,w:8.21},{l:3,w:8.62},{l:4,w:8.87},{l:5,w:10.13},{l:6,w:9.59},{l:7,w:8.75},{l:8,w:10.98},{l:9,w:9.96},{l:10,w:10.01},{l:11,w:10.52},{l:11.03,w:5.28}]},
-  {date:"11 May 2026",hole:"A1-5",level:6.5,weight:59.23,density:1.1396,status:"Reject",samples:[{l:1,w:6.69},{l:2,w:7.99},{l:3,w:9.49},{l:4,w:9.44},{l:5,w:10.13},{l:6,w:10.07},{l:6.5,w:5.42},{l:6.96,w:9.49}]},
-  {date:"11 May 2026",hole:"A1-6",level:6.7,weight:68.08,density:1.2708,status:"Reject",samples:[{l:1,w:8.62},{l:2,w:8.93},{l:3,w:9.42},{l:4,w:9.26},{l:5,w:9.7},{l:6,w:9.67},{l:6.5,w:3.99},{l:6.7,w:8.49}]},
-  {date:"11 May 2026",hole:"A1-34",level:10.95,weight:101.92,density:1.1641,status:"Reject",samples:[{l:1,w:8.3},{l:2,w:8.08},{l:3,w:8.78},{l:4,w:8.54},{l:5,w:9.29},{l:6,w:10},{l:7,w:9.85},{l:8,w:9.9},{l:9,w:9.64},{l:10,w:8.85},{l:10.95,w:10.69}]},
-  {date:"11 May 2026",hole:"A1-35",level:10.915,weight:116.19,density:1.3313,status:"Reject",samples:[]},
-  {date:"11 May 2026",hole:"A1-36",level:10.94,weight:117.57,density:1.344,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-37",level:11.1,weight:112.16,density:1.2637,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-38",level:11.04,weight:108.19,density:1.2256,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-7",level:6.8,weight:57.81,density:1.0632,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-8",level:6.89,weight:62.5,density:1.1345,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-39",level:10.97,weight:113.83,density:1.2977,status:"Reject",samples:[]},
-  {date:"12 May 2026",hole:"A1-9",level:6.86,weight:65.95,density:1.2023,status:"Reject",samples:[]}
-];
-
-let allData = DEFAULT.slice();
-let statusF = "All", dateF = "All", groupF = "All", selectedHole = null;
+const TARGET_SAMPLES = 913;
+let allData = []; 
+let statusF = "All", dateF = "All", groupF = "All", holeF = "All", selectedHole = null;
 let searchF = "", levelMinF = "", levelMaxF = "", densityMinF = "", densityMaxF = "";
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
-let chartDensity = null, chartWeight = null, chartStatus = null, chartSample = null;
-let chartTrend = null, chartScatter = null;
+let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null;
 
 function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-function parseXLSX(buf) {
-  const wb = XLSX.read(buf, { type: "array", cellDates: true });
-  // หา Sheet ที่ชื่อมีคำว่า Summary หรือใช้ชีตแรกสุด
-  let targetSheet = wb.SheetNames.find(n => n.toLowerCase().includes("summary")) || wb.SheetNames[0];
-  const ws = wb.Sheets[targetSheet];
-  if (!ws) { alert("No valid sheet found in this file."); return null; }
-  
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const out = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[2]) continue;
-    let date = ""; const dv = r[1];
-    if (dv instanceof Date) date = dv.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-    else if (typeof dv === "number") date = new Date(Math.round((dv - 25569) * 86400 * 1000)).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-    else date = String(dv || "");
-    
-    let samples = [];
-    const detWs = wb.Sheets[String(r[2])];
-    if (detWs) {
-      const dRows = XLSX.utils.sheet_to_json(detWs, { header: 1, defval: null });
-      for (let j = 3; j < dRows.length; j++) {
-        if (typeof dRows[j][2] === "number" && typeof dRows[j][3] === "number") {
-          samples.push({ l: +dRows[j][2].toFixed(3), w: +dRows[j][3].toFixed(3) });
-        }
+// 🟢 --- ส่วนที่ 1: ระบบฐานข้อมูล (IndexedDB) ---
+const DB_NAME = "QC_Dashboard_DB", STORE_NAME = "QC_Data";
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      if (!e.target.result.objectStoreNames.contains(STORE_NAME)) {
+        e.target.result.createObjectStore(STORE_NAME);
       }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveToDB(data) {
+  const db = await initDB();
+  const tx = db.transaction(STORE_NAME, "readwrite");
+  tx.objectStore(STORE_NAME).put(data, "savedData");
+}
+
+async function loadFromDB() {
+  showLoading();
+  try {
+    const db = await initDB();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get("savedData");
+    req.onsuccess = () => {
+      if (req.result && req.result.length > 0) {
+        allData = req.result;
+        populateFilters();
+        render();
+        document.getElementById("clear-db-btn").style.display = "block";
+      }
+      hideLoading();
+    };
+  } catch (e) { hideLoading(); }
+}
+
+async function clearDB() {
+  if (!confirm("Are you sure you want to clear all saved data?")) return;
+  const db = await initDB();
+  db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete("savedData");
+  allData = [];
+  document.getElementById("clear-db-btn").style.display = "none";
+  populateFilters();
+  render();
+}
+
+function excelSerialToDateStr(serial) {
+  const ms = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
+  return new Date(ms).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function getCellVal(ws, addr) {
+  const cell = ws[addr];
+  if (!cell) return null;
+  return (cell.v !== undefined) ? cell.v : null;
+}
+
+function parseXLSX(buf) {
+  const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: true });
+  const out = [];
+
+  wb.SheetNames.forEach(sheetName => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws || !ws["!ref"]) return;
+
+    const dateRaw = getCellVal(ws, "C2");
+    if (typeof dateRaw !== "number") return;
+    const dateStr = excelSerialToDateStr(dateRaw);
+
+    const pileRaw = getCellVal(ws, "H2");
+    const holeRaw = getCellVal(ws, "H3");
+    const pile    = (pileRaw !== null && pileRaw !== undefined) ? String(pileRaw).trim() : "";
+    const holeNum = (holeRaw !== null && holeRaw !== undefined) ? String(holeRaw).trim() : sheetName;
+    const holeName = pile ? `${pile}-${holeNum}` : holeNum;
+
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const lastRow = range.e.r + 1; 
+
+    const rawSamples = [];
+    for (let row = 7; row <= lastRow; row++) {
+      const bVal = getCellVal(ws, `B${row}`); 
+      const cVal = getCellVal(ws, `C${row}`); 
+      const gVal = getCellVal(ws, `G${row}`); 
+      const hVal = getCellVal(ws, `H${row}`); 
+      const jVal = getCellVal(ws, `J${row}`); 
+
+      if (bVal !== null && typeof bVal === "string" && (bVal.toLowerCase() === "total" || bVal.toLowerCase() === "average")) continue;
+
+      const dFrom = parseFloat(bVal);
+      const dTo   = parseFloat(cVal);
+      const wt    = parseFloat(gVal);
+      const den   = parseFloat(hVal);
+
+      if (isNaN(dTo) || isNaN(wt) || isNaN(den) || wt <= 0 || den <= 0) continue;
+
+      const status = (jVal !== null && jVal !== undefined && String(jVal).trim() !== "") ? String(jVal).trim() : "Accept";
+
+      rawSamples.push({ from: isNaN(dFrom) ? 0 : dFrom, to: dTo, w: wt, den: den, status: status });
     }
-    out.push({ date, hole: String(r[2]), level: +(r[3] || 0).toFixed(3), weight: +(r[4] || 0).toFixed(3), density: +(r[5] || 0).toFixed(4), status: String(r[6] || ""), samples });
-  }
+
+    if (rawSamples.length > 0) {
+      out.push({ date: dateStr, hole: holeName, pile: pile, rawSamples: rawSamples });
+    }
+  });
+
   return out;
+}
+
+function getFiltered() {
+  let res = [];
+  allData.forEach(h => {
+    if (dateF !== "All" && h.date !== dateF) return;
+    if (groupF !== "All" && h.pile !== groupF) return;
+    if (holeF !== "All" && h.hole !== holeF) return; 
+    if (searchF && !h.hole.toLowerCase().includes(searchF.toLowerCase())) return;
+
+    let filteredSamples = h.rawSamples.filter(s => {
+      let pass = true;
+      if (statusF !== "All") pass = pass && s.status.toLowerCase().includes(statusF.toLowerCase());
+      if (levelMinF !== "") pass = pass && s.to >= Number(levelMinF);
+      if (levelMaxF !== "") pass = pass && s.to <= Number(levelMaxF);
+      if (densityMinF !== "") pass = pass && s.den >= Number(densityMinF);
+      if (densityMaxF !== "") pass = pass && s.den <= Number(densityMaxF);
+      return pass;
+    });
+
+    if (filteredSamples.length === 0) return;
+
+    let totalW = 0, sumDen = 0, accCount = 0, rejCount = 0, maxL = 0;
+    filteredSamples.forEach(s => {
+      totalW += s.w; sumDen += s.den;
+      if (s.to > maxL) maxL = s.to;
+      if (s.status.toLowerCase().includes("reject")) rejCount++; else accCount++;
+    });
+
+    res.push({
+      date: h.date, hole: h.hole,
+      level: maxL, weight: totalW, density: sumDen / filteredSamples.length, 
+      accCount: accCount, rejCount: rejCount, totalSamples: filteredSamples.length,
+      samples: filteredSamples
+    });
+  });
+  return res;
 }
 
 function calcStats(arr, key) {
@@ -379,35 +472,29 @@ function calcCorrelation(arr, keyX, keyY) {
   return den === 0 ? 0 : ((n * sumXY) - (sumX * sumY)) / den;
 }
 
-function getFiltered() {
-  return allData.filter(r => {
-    const prefix = r.hole.includes('-') ? r.hole.split('-')[0] : r.hole;
-    const matchStatus = (statusF === "All" || r.status === statusF);
-    const matchDate = (dateF === "All" || r.date === dateF);
-    const matchGroup = (groupF === "All" || prefix === groupF);
-    const matchSearch = r.hole.toLowerCase().includes(searchF.toLowerCase());
-    const matchLevel = (levelMinF === "" || r.level >= Number(levelMinF)) && (levelMaxF === "" || r.level <= Number(levelMaxF));
-    const matchDensity = (densityMinF === "" || r.density >= Number(densityMinF)) && (densityMaxF === "" || r.density <= Number(densityMaxF));
-    return matchStatus && matchDate && matchGroup && matchSearch && matchLevel && matchDensity;
-  });
-}
-
 function renderSummary(f) {
-  const acc = f.filter(r => r.status === "Accept").length;
-  const rate = f.length ? (acc / f.length * 100).toFixed(1) : 0;
-  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
+  let totalAcc = 0, totalRej = 0;
+  f.forEach(r => { totalAcc += r.accCount; totalRej += r.rejCount; });
+  let totalS = totalAcc + totalRej;
+  
+  let pct = Math.min((totalAcc / TARGET_SAMPLES) * 100, 100).toFixed(1);
+  document.getElementById("prog-val-text").textContent = totalAcc;
+  document.getElementById("prog-pct").textContent = pct;
+  document.getElementById("prog-fill").style.width = pct + "%";
 
+  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
+  
   document.getElementById("summary-cards").innerHTML = `
-    <div class="card"><div class="card-label">Total Holes</div><div class="card-val">${f.length}</div></div>
-    <div class="card c-accept"><div class="card-label">Accept</div><div class="card-val">${acc}<span class="card-unit">${rate}%</span></div></div>
-    <div class="card c-reject"><div class="card-label">Reject</div><div class="card-val">${f.length - acc}<span class="card-unit">${f.length ? (100 - rate).toFixed(1) : 0}%</span></div></div>
+    <div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div>
+    <div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div>
+    <div class="card c-accept"><div class="card-label">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div>
+    <div class="card c-reject"><div class="card-label">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div>
     <div class="card c-accent"><div class="card-label">Avg Density</div><div class="card-val">${ds.avg}<span class="card-unit">kg/m³</span></div></div>
-    <div class="card"><div class="card-label">Avg Weight</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div>
-    <div class="card"><div class="card-label">Avg Level</div><div class="card-val">${ls.avg}<span class="card-unit">m</span></div></div>
+    <div class="card"><div class="card-label">Avg Weight/Hole</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div>
   `;
 
   document.getElementById("stat-grid").innerHTML = [
-    { title: "Density (kg/m³)", s: ds }, { title: "Total Weight (kg)", s: ws }, { title: "Level Depth (m)", s: ls }
+    { title: "Density (kg/m³)", s: ds }, { title: "Filtered Weight/Hole (kg)", s: ws }, { title: "Filtered Max Depth (m)", s: ls }
   ].map(({ title, s }) => `
     <div class="stat-box">
       <div class="stat-box-title">${title}</div>
@@ -422,53 +509,103 @@ function renderSummary(f) {
 function gc(id) { return document.getElementById(id).getContext("2d"); }
 const GRID = "rgba(255,255,255,0.05)", TICK = "#7a8099";
 
-function renderCharts(f) {
-  const ds = calcStats(f, "density"), ws = calcStats(f, "weight");
+// 🟢 --- ส่วนที่ 2: ฟังก์ชันวาดกราฟ Histogram ---
+function renderHistogram(f) {
+  if (chartHist) chartHist.destroy();
+  
+  let densities = [];
+  f.forEach(r => r.samples.forEach(s => densities.push(s.den)));
+  
+  if (densities.length === 0) return;
 
-  /* DENSITY CHART */
+  const min = Math.min(...densities), max = Math.max(...densities);
+  const binCount = 15, binWidth = (max - min) / binCount || 1; 
+  
+  let bins = Array(binCount).fill(0), binLabels = [];
+  for (let i = 0; i < binCount; i++) {
+    binLabels.push(`${(min + i * binWidth).toFixed(2)} - ${(min + (i + 1) * binWidth).toFixed(2)}`);
+  }
+
+  densities.forEach(d => {
+    let binIdx = Math.floor((d - min) / binWidth);
+    if (binIdx >= binCount) binIdx = binCount - 1; 
+    bins[binIdx]++;
+  });
+
+  chartHist = new Chart(gc("hist-chart"), {
+    type: "bar",
+    data: {
+      labels: binLabels,
+      datasets: [{ label: "Samples", data: bins, backgroundColor: "#4f8ef7", borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45, font: { size: 10 } } },
+        y: { title: { display: true, text: "Frequency", color: TICK, font: { size: 11 } }, grid: { color: GRID }, ticks: { color: TICK } }
+      }
+    }
+  });
+}
+
+function renderCharts(f) {
+  const ds = calcStats(f, "density");
+
+  /* 🟢 แก้ไขเส้นกราฟ SD ไม่ให้ซ้อนทับกัน */
   document.getElementById("density-wrap").style.height = Math.max(f.length * 38 + 50, 160) + "px";
   if (chartDensity) chartDensity.destroy();
+  
+  const dataAccept = f.map(r => r.density * (r.accCount / r.totalSamples));
+  const dataReject = f.map(r => r.density * (r.rejCount / r.totalSamples));
+
   chartDensity = new Chart(gc("density-chart"), {
     type: "bar",
     data: {
       labels: f.map(r => r.hole),
       datasets: [
-        { label: "Density", data: f.map(r => r.density), backgroundColor: f.map(r => r.status === "Accept" ? "#2dd4a0" : "#f87060"), borderRadius: 3, borderSkipped: "left" },
-        { label: "Avg", data: f.map(() => ds.avg), type: "line", borderColor: "#4f8ef7", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, fill: false },
-        { label: "+1 SD", data: f.map(() => ds.avg + ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false },
-        { label: "-1 SD", data: f.map(() => ds.avg - ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false }
+        { label: "Accept Density", data: dataAccept, backgroundColor: "#2dd4a0", borderRadius: {topLeft: 3, bottomLeft: 3}, stack: "barStack" },
+        { label: "Reject Density", data: dataReject, backgroundColor: "#f87060", borderRadius: {topRight: 3, bottomRight: 3}, stack: "barStack" },
+        { label: "Avg", data: f.map(() => ds.avg), type: "line", borderColor: "#4f8ef7", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, fill: false, stack: "lineAvg" },
+        { label: "+1 SD", data: f.map(() => ds.avg + ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, stack: "lineSD1" },
+        { label: "-1 SD", data: f.map(() => ds.avg - ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, stack: "lineSD2" }
       ]
     },
-    options: {
-      indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: "#1e2330", titleColor: "#e8eaf0", bodyColor: "#7a8099" } },
-      scales: { x: { grid: { color: GRID }, ticks: { color: TICK } }, y: { grid: { display: false }, ticks: { color: TICK } } },
-      onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); }
+    options: { 
+      indexAxis: "y", responsive: true, maintainAspectRatio: false, 
+      plugins: { 
+        legend: { display: false }, 
+        tooltip: { 
+          backgroundColor: "#1e2330", titleColor: "#e8eaf0", bodyColor: "#7a8099",
+          callbacks: {
+            label: c => {
+              if(c.dataset.label.includes("SD")) return `${c.dataset.label}: ${c.parsed.x.toFixed(4)}`;
+              if(c.dataset.label === "Avg") return `Avg: ${c.parsed.x.toFixed(4)}`;
+              let totalDen = f[c.dataIndex].density;
+              return `Total Density: ${totalDen.toFixed(4)} kg/m³`;
+            }
+          }
+        } 
+      }, 
+      scales: { 
+        x: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } }, 
+        y: { stacked: true, grid: { display: false }, ticks: { color: TICK } } 
+      }, 
+      onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } 
     }
   });
 
-  /* WEIGHT CHART */
-  if (chartWeight) chartWeight.destroy();
-  chartWeight = new Chart(gc("weight-chart"), {
-    type: "bar",
-    data: { labels: f.map(r => r.hole), datasets: [ { label: "Weight", data: f.map(r => r.weight), backgroundColor: "#4f8ef7cc" }, { label: "Avg", data: f.map(() => ws.avg), type: "line", borderColor: "#4f8ef7", pointRadius: 0 } ] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { grid: { color: GRID }, ticks: { color: TICK } } } }
-  });
-
-  /* STATUS CHART */
-  const dates = [...new Set(f.map(r => r.date))].sort((a,b) => new Date(a) - new Date(b));
-  if (chartStatus) chartStatus.destroy();
-  chartStatus = new Chart(gc("status-chart"), {
-    type: "bar",
-    data: { labels: dates, datasets: [ { label: "Accept", data: dates.map(d => f.filter(r => r.date === d && r.status === "Accept").length), backgroundColor: "#2dd4a0cc" }, { label: "Reject", data: dates.map(d => f.filter(r => r.date === d && r.status === "Reject").length), backgroundColor: "#f87060cc" } ] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false }, ticks: { color: TICK } }, y: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } } } }
-  });
-
   /* TREND CHART */
+  const dates = [...new Set(f.map(r => r.date))].sort((a,b) => new Date(a) - new Date(b));
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(gc("trend-chart"), {
     type: "line",
-    data: { labels: dates, datasets: [{ label: "% Accept", data: dates.map(d => { const dF = f.filter(r => r.date === d); return dF.length ? (dF.filter(r => r.status === "Accept").length / dF.length) * 100 : 0; }), borderColor: "#2dd4a0", backgroundColor: "rgba(45,212,160,0.1)", fill: true }] },
+    data: { labels: dates, datasets: [{ label: "% Accept", data: dates.map(d => { 
+      let acc = f.filter(r=>r.date===d).reduce((a,b)=>a+b.accCount,0);
+      let rej = f.filter(r=>r.date===d).reduce((a,b)=>a+b.rejCount,0);
+      let tot = acc + rej;
+      return tot ? (acc/tot)*100 : 0; 
+    }), borderColor: "#2dd4a0", backgroundColor: "rgba(45,212,160,0.1)", fill: true }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { min: 0, max: 100, grid: { color: GRID }, ticks: { color: TICK } } } }
   });
 
@@ -478,22 +615,24 @@ function renderCharts(f) {
   if (chartScatter) chartScatter.destroy();
   chartScatter = new Chart(gc("scatter-chart"), {
     type: "scatter",
-    data: { datasets: [{ data: f.map(r => ({ x: r.level, y: r.density, raw: r })), backgroundColor: f.map(r => r.status === "Accept" ? "#2dd4a0" : "#f87060") }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Level (m)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } }, y: { title: { display: true, text: "Density", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } } }
+    data: { datasets: [{ data: f.map(r => ({ x: r.level, y: r.density, raw: r })), backgroundColor: f.map(r => r.rejCount === 0 ? "#2dd4a0" : (r.accCount === 0 ? "#f87060" : "#f5c842")) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: {callbacks: { label: c => `${c.raw.raw.hole}` }} }, scales: { x: { title: { display: true, text: "Max Depth (m)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } }, y: { title: { display: true, text: "Density", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } } }
   });
+
+  // 🟢 เรียกใช้ Histogram
+  renderHistogram(f);
 }
 
 function handleSort(col) {
   if (sortCol === col) sortDesc = !sortDesc; else { sortCol = col; sortDesc = false; }
-  document.querySelectorAll(".sort-icon").forEach(el => el.innerHTML = "");
-  document.getElementById(`sort-${col}`).innerHTML = sortDesc ? "▼" : "▲";
+  document.querySelectorAll("[id^='sort-']").forEach(el => el.innerHTML = "");
+  document.getElementById(`sort-${col}`).innerHTML = sortDesc ? " ▼" : " ▲";
   curPage = 1; renderTable(getFiltered());
 }
 
 function changePage(step) { curPage += step; renderTable(getFiltered()); }
 
 function renderTable(f) {
-  document.getElementById("table-count").textContent = f.length + " records";
   let sortedF = [...f];
   if (sortCol) {
     sortedF.sort((a, b) => {
@@ -510,9 +649,12 @@ function renderTable(f) {
 
   document.getElementById("table-body").innerHTML = pagedData.map(r => `
     <tr class="${selectedHole === r.hole ? "selected" : ""}" onclick="selectHole('${r.hole}')">
-      <td>${r.date}</td> <td style="font-weight:600">${r.hole}</td> <td class="mono">${r.level}</td>
-      <td class="mono">${r.weight.toFixed(2)}</td> <td class="mono">${r.density}</td>
-      <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
+      <td>${r.date}</td> <td style="font-weight:600">${r.hole}</td> <td class="mono">${r.level.toFixed(2)}</td>
+      <td class="mono">${r.weight.toFixed(2)}</td> <td class="mono">${r.density.toFixed(4)}</td>
+      <td>
+        ${r.accCount > 0 ? `<span class="badge badge-accept">${r.accCount} Acc</span>` : ''}
+        ${r.rejCount > 0 ? `<span class="badge badge-reject">${r.rejCount} Rej</span>` : ''}
+      </td>
     </tr>`).join("");
   
   document.getElementById("page-info").textContent = `Showing ${f.length ? startIdx + 1 : 0}-${Math.min(startIdx + rowsPerPage, f.length)} of ${f.length}`;
@@ -521,25 +663,40 @@ function renderTable(f) {
 
 function exportCSV() {
   const f = getFiltered(); if (!f.length) return alert("No data to export.");
-  let csv = "Date,Hole No.,Level (m),Weight (kg),Density,Status\n";
-  f.forEach(r => csv += `"${r.date}","${r.hole}",${r.level},${r.weight},${r.density},"${r.status}"\n`);
+  let csv = "Date,Hole No.,Max Filtered Depth (m),Total Filtered Weight (kg),Avg Density,Accept Samples,Reject Samples\n";
+  f.forEach(r => csv += `"${r.date}","${r.hole}",${r.level},${r.weight},${r.density},${r.accCount},${r.rejCount}\n`);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = "QC_Data.csv"; a.click();
 }
 
 function selectHole(h) {
   selectedHole = h; renderTable(getFiltered());
   if (h) {
-    const rec = allData.find(r => r.hole === h);
+    const rec = getFiltered().find(r => r.hole === h);
     if (rec) {
       document.getElementById("detail-hole").textContent = rec.hole;
-      document.getElementById("detail-badge").innerHTML = `<span class="badge badge-${rec.status.toLowerCase()}">${rec.status}</span>`;
-      document.getElementById("detail-meta").innerHTML = [["Date", rec.date], ["Level Depth", rec.level + " m"], ["Total Weight", rec.weight + " kg"], ["Density", rec.density + " kg/m³"]].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
+      let badgeHtml = "";
+      if (rec.rejCount === 0) badgeHtml = `<span class="badge badge-accept">100% Accept</span>`;
+      else if (rec.accCount === 0) badgeHtml = `<span class="badge badge-reject">100% Reject</span>`;
+      else badgeHtml = `<span class="badge badge-mixed">Mixed (${rec.accCount} Acc / ${rec.rejCount} Rej)</span>`;
+      document.getElementById("detail-badge").innerHTML = badgeHtml;
+
+      document.getElementById("detail-meta").innerHTML = [["Date", rec.date], ["Filtered Depth", rec.level + " m"], ["Filtered Weight", rec.weight.toFixed(2) + " kg"], ["Avg Density", rec.density.toFixed(4) + " kg/m³"]].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
       
       const sampleSec = document.getElementById("sample-section");
       if (rec.samples.length > 0) {
         sampleSec.style.display = "block";
         if (chartSample) chartSample.destroy();
-        chartSample = new Chart(gc("sample-chart"), { type: "bar", data: { labels: rec.samples.map(s => s.l), datasets: [{ data: rec.samples.map(s => s.w), backgroundColor: "#4f8ef7cc" }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { grid: { color: GRID }, ticks: { color: TICK } } } } });
+        chartSample = new Chart(gc("sample-chart"), { 
+          type: "bar", 
+          data: { 
+            labels: rec.samples.map(s => s.to + "m"), 
+            datasets: [{ 
+              data: rec.samples.map(s => s.w), 
+              backgroundColor: rec.samples.map(s => String(s.status).toLowerCase().includes("reject") ? "#f87060cc" : "#4f8ef7cc") 
+            }] 
+          }, 
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: {callbacks: {label: c => `Wt: ${c.parsed.y} kg`}} }, scales: { x: { grid: { display: false }, ticks: { color: TICK } }, y: { title: {display: true, text: "Weight (kg)", color: TICK}, grid: { color: GRID }, ticks: { color: TICK } } } } 
+        });
       } else { sampleSec.style.display = "none"; }
       document.getElementById("detail-panel").style.display = "block";
     }
@@ -547,13 +704,16 @@ function selectHole(h) {
 }
 function closeDetail() { selectHole(null); }
 
-function populateGroups() { document.getElementById("group-select").innerHTML = ["All", ...new Set(allData.map(r => r.hole.includes('-') ? r.hole.split('-')[0] : r.hole))].sort().map(p => `<option value="${p}"${p === groupF ? " selected" : ""}>${p === "All" ? "All Groups" : p}</option>`).join(""); }
-function populateDates() { document.getElementById("date-select").innerHTML = ["All", ...new Set(allData.map(r => r.date))].map(d => `<option value="${d}"${d === dateF ? " selected" : ""}>${d === "All" ? "All Dates" : d}</option>`).join(""); }
+function populateFilters() { 
+  document.getElementById("group-select").innerHTML = ["All", ...new Set(allData.map(r => r.pile))].sort().map(p => `<option value="${p}"${p === groupF ? " selected" : ""}>${p === "All" ? "All Piles" : "Pile " + p}</option>`).join(""); 
+  document.getElementById("hole-select").innerHTML = ["All", ...new Set(allData.map(r => r.hole))].sort().map(h => `<option value="${h}"${h === holeF ? " selected" : ""}>${h === "All" ? "All Holes" : h}</option>`).join(""); 
+  document.getElementById("date-select").innerHTML = ["All", ...new Set(allData.map(r => r.date))].map(d => `<option value="${d}"${d === dateF ? " selected" : ""}>${d === "All" ? "All Dates" : d}</option>`).join(""); 
+}
 
 function render() {
   const f = getFiltered(); renderSummary(f); renderCharts(f); renderTable(f);
   document.getElementById("record-count").textContent = allData.length;
-  document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF) ? "" : "none";
+  document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || holeF !== "All" || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF) ? "" : "none";
   document.querySelectorAll(".pill-group .pill").forEach(b => b.className = "pill" + (b.dataset.s === statusF ? " active-" + statusF.toLowerCase() : ""));
 }
 
@@ -564,12 +724,16 @@ function loadFile(file) {
     reader.onload = e => {
       const parsed = parseXLSX(new Uint8Array(e.target.result));
       if (parsed && parsed.length > 0) {
-        allData = parsed; selectedHole = null; closeDetail();
-        statusF = "All"; dateF = "All"; groupF = "All"; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
-        document.getElementById("search-hole").value = ""; document.querySelectorAll(".range-input").forEach(i => i.value = "");
-        curPage = 1; sortCol = ""; document.querySelectorAll(".sort-icon").forEach(el => el.innerHTML = "");
-        populateGroups(); populateDates(); render();
-      }
+        const newHoleNames = new Set(parsed.map(p => p.hole));
+        allData = allData.filter(d => !newHoleNames.has(d.hole)).concat(parsed);
+        
+        saveToDB(allData); // 🟢 บันทึกข้อมูลลง IndexedDB ทันที
+        document.getElementById("clear-db-btn").style.display = "block"; // 🟢 เปิดปุ่มล้างข้อมูล
+        
+        selectedHole = null; closeDetail();
+        curPage = 1; sortCol = ""; document.querySelectorAll("[id^='sort-']").forEach(el => el.innerHTML = "");
+        populateFilters(); render();
+      } else { alert("ไม่พบข้อมูลที่อ่านได้ (กรุณาตรวจสอบว่าเลือกไฟล์ Drilling Data)"); }
       hideLoading();
     };
     reader.readAsArrayBuffer(file);
@@ -580,12 +744,13 @@ const dz = document.getElementById("dropzone"), fi = document.getElementById("fi
 document.getElementById("upload-btn").addEventListener("click", e => { e.stopPropagation(); fi.click(); });
 dz.addEventListener("click", () => fi.click());
 dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
-dz.addEventListener("dragleave", () => dz.classList.remove("drag")); /* 🟢 แก้ไข Syntax Error ตรงนี้แล้ว 🟢 */
+dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
 dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("drag"); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
 fi.addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
 
 document.querySelectorAll(".pill-group .pill").forEach(b => b.addEventListener("click", () => { statusF = b.dataset.s; curPage = 1; render(); }));
 document.getElementById("group-select").addEventListener("change", e => { groupF = e.target.value; curPage = 1; render(); });
+document.getElementById("hole-select").addEventListener("change", e => { holeF = e.target.value; curPage = 1; render(); }); 
 document.getElementById("date-select").addEventListener("change", e => { dateF = e.target.value; curPage = 1; render(); });
 document.getElementById("search-hole").addEventListener("input", e => { searchF = e.target.value; curPage = 1; render(); });
 document.getElementById("level-min").addEventListener("input", e => { levelMinF = e.target.value; curPage = 1; render(); });
@@ -593,12 +758,16 @@ document.getElementById("level-max").addEventListener("input", e => { levelMaxF 
 document.getElementById("density-min").addEventListener("input", e => { densityMinF = e.target.value; curPage = 1; render(); });
 document.getElementById("density-max").addEventListener("input", e => { densityMaxF = e.target.value; curPage = 1; render(); });
 document.getElementById("clear-btn").addEventListener("click", () => {
-  statusF = "All"; dateF = "All"; groupF = "All"; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
+  statusF = "All"; dateF = "All"; groupF = "All"; holeF = "All"; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
   document.getElementById("search-hole").value = ""; document.querySelectorAll(".range-input").forEach(i => i.value = "");
-  curPage = 1; populateGroups(); populateDates(); render();
+  curPage = 1; populateFilters(); render();
 });
 
-populateGroups(); populateDates(); render();
+// 🟢 ผูกปุ่ม Clear DB และโหลดข้อมูลอัตโนมัติเมื่อเปิดเว็บ
+document.getElementById("clear-db-btn").addEventListener("click", clearDB);
+window.onload = loadFromDB;
+
+render();
 </script>
 </body>
 </html>
