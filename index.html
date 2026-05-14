@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BLCP Sampling QC Dashboard V7 (Cloud)</title>
+<title>BLCP Sampling QC Dashboard V8 (Moisture Ready)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -21,6 +21,7 @@
     --accept: #2dd4a0; --accept-bg: rgba(45,212,160,0.1);
     --reject: #f87060; --reject-bg: rgba(248,112,96,0.1);
     --warning: #f5c842; --radius: 12px; --radius-sm: 8px;
+    --moisture: #36a2eb; /* สีสำหรับกราฟ Moisture */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { font-size: 14px; }
@@ -242,10 +243,16 @@
     </div>
   </div>
 
-  <div class="chart-box-wide" style="margin-bottom: 24px;">
+  <div class="chart-box-wide">
     <div class="chart-title">Weight Distribution</div>
     <div class="chart-sub">Total weight per hole (kg) - Check for missing weight</div>
     <div style="position:relative;height:260px;width:100%"><canvas id="weight-chart"></canvas></div>
+  </div>
+  
+  <div class="chart-box-wide">
+    <div class="chart-title">Moisture by Hole</div>
+    <div class="chart-sub">Average Total Moisture (%) per hole</div>
+    <div style="position:relative;height:260px;width:100%"><canvas id="moisture-chart"></canvas></div>
   </div>
 
   <div class="chart-box-wide">
@@ -286,6 +293,7 @@
             <th onclick="handleSort('level')">Max Depth <span id="sort-level"></span></th>
             <th onclick="handleSort('weight')">Total Wt. <span id="sort-weight"></span></th>
             <th onclick="handleSort('density')">Avg Density <span id="sort-density"></span></th>
+            <th onclick="handleSort('moisture')">Avg Moisture <span id="sort-moisture"></span></th>
             <th onclick="handleSort('accCount')">Status <span id="sort-accCount"></span></th>
           </tr>
         </thead>
@@ -302,11 +310,11 @@
   </div>
 
 </main>
-<div class="footer">BLCP Sampling QC Dashboard V7 · Firebase Cloud Real-time</div>
+<div class="footer">BLCP Sampling QC Dashboard V8 · Firebase Cloud & Moisture Ready</div>
 
 <script>
 // ==========================================
-// 🔴 จุดที่คุณต้องแก้ไขโค้ด: ใส่ Config ของคุณตรงนี้! 🔴
+// 🔴 นำ Config ของ Firebase มาใส่ตรงนี้ครับ 🔴
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCyaMvvkOs05UVHIOd58YrXgt6fXQnubKs",
@@ -319,7 +327,6 @@ const firebaseConfig = {
 };
 // ==========================================
 
-// เริ่มต้นเปิดใช้งาน Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const DB_REF = "qc_data_v1";
@@ -329,14 +336,12 @@ let allData = [];
 let statusF = "All", dateF = "All", groupF = "All", holeF = "All", selectedHole = null;
 let searchF = "", levelMinF = "", levelMaxF = "", densityMinF = "", densityMaxF = "";
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
-let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null, chartStatus = null, chartWeight = null;
+let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null, chartStatus = null, chartWeight = null, chartMoisture = null; // 🟢 เพิ่ม chartMoisture
 
 function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-function saveToDB(data) {
-  database.ref(DB_REF).set(data);
-}
+function saveToDB(data) { database.ref(DB_REF).set(data); }
 
 function loadFromDB() {
   showLoading();
@@ -402,6 +407,7 @@ function parseXLSX(buf) {
       const cVal = getCellVal(ws, `C${row}`); 
       const gVal = getCellVal(ws, `G${row}`); 
       const hVal = getCellVal(ws, `H${row}`); 
+      const iVal = getCellVal(ws, `I${row}`); // 🟢 ดึงข้อมูล Moisture จากคอลัมน์ I
       const jVal = getCellVal(ws, `J${row}`); 
 
       if (bVal !== null && typeof bVal === "string" && (bVal.toLowerCase() === "total" || bVal.toLowerCase() === "average")) continue;
@@ -410,12 +416,14 @@ function parseXLSX(buf) {
       const dTo   = parseFloat(cVal);
       const wt    = parseFloat(gVal);
       const den   = parseFloat(hVal);
+      const mois  = parseFloat(iVal); // แปลง Moisture เป็นตัวเลข
 
       if (isNaN(dTo) || isNaN(wt) || isNaN(den) || wt <= 0 || den <= 0) continue;
 
       const status = (jVal !== null && jVal !== undefined && String(jVal).trim() !== "") ? String(jVal).trim() : "Accept";
 
-      rawSamples.push({ from: isNaN(dFrom) ? 0 : dFrom, to: dTo, w: wt, den: den, status: status });
+      // 🟢 นำ moisture เก็บเข้าไปใน Dataset ด้วย (ถ้าเป็น NaN ให้มีค่าเป็น 0)
+      rawSamples.push({ from: isNaN(dFrom) ? 0 : dFrom, to: dTo, w: wt, den: den, mois: isNaN(mois) ? 0 : mois, status: status });
     }
 
     if (rawSamples.length > 0) {
@@ -446,9 +454,13 @@ function getFiltered() {
 
     if (filteredSamples.length === 0) return;
 
-    let totalW = 0, sumDen = 0, accCount = 0, rejCount = 0, maxL = 0;
+    // 🟢 ตัวแปรสำหรับ Moisture
+    let totalW = 0, sumDen = 0, sumMois = 0, validMoisCount = 0, accCount = 0, rejCount = 0, maxL = 0;
+    
     filteredSamples.forEach(s => {
       totalW += s.w; sumDen += s.den;
+      // 🟢 นำมารวมถ้ามีค่ามากกว่า 0
+      if (s.mois && s.mois > 0) { sumMois += s.mois; validMoisCount++; }
       if (s.to > maxL) maxL = s.to;
       if (s.status.toLowerCase().includes("reject")) rejCount++; else accCount++;
     });
@@ -456,6 +468,7 @@ function getFiltered() {
     res.push({
       date: h.date, hole: h.hole,
       level: maxL, weight: totalW, density: sumDen / filteredSamples.length, 
+      moisture: validMoisCount > 0 ? sumMois / validMoisCount : 0, // 🟢 หาค่าเฉลี่ย
       accCount: accCount, rejCount: rejCount, totalSamples: filteredSamples.length,
       samples: filteredSamples
     });
@@ -561,6 +574,22 @@ function renderCharts(f) {
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45 } }, y: { title: { display: true, text: "Weight (kg)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } }, onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } }
   });
+  
+  /* 🟢 MOISTURE CHART */
+  // หาค่าเฉลี่ยเฉพาะกลุ่มที่มีค่า Moisture > 0
+  const ms = calcStats(f.filter(r => r.moisture > 0), "moisture"); 
+  if (chartMoisture) chartMoisture.destroy();
+  chartMoisture = new Chart(gc("moisture-chart"), {
+    type: "bar",
+    data: {
+      labels: f.map(r => r.hole),
+      datasets: [
+        { label: "Avg Moisture (%)", data: f.map(r => r.moisture > 0 ? r.moisture : null), backgroundColor: "rgba(54, 162, 235, 0.8)", borderRadius: 4, order: 2 },
+        { label: "Average", data: f.map(() => ms.avg || 0), type: "line", borderColor: "rgba(54, 162, 235, 1)", borderWidth: 2, pointRadius: 0, fill: false, order: 1, borderDash: [5, 4] }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45 } }, y: { title: { display: true, text: "Moisture (%)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } }, onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } }
+  });
 
   renderHistogram(f);
 }
@@ -570,11 +599,27 @@ function renderSummary(f) {
   f.forEach(r => { totalAcc += r.accCount; totalRej += r.rejCount; });
   let totalS = totalAcc + totalRej;
   let pct = Math.min((totalAcc / TARGET_SAMPLES) * 100, 100).toFixed(1);
+  
   document.getElementById("prog-val-text").textContent = totalAcc;
   document.getElementById("prog-pct").textContent = pct;
   document.getElementById("prog-fill").style.width = pct + "%";
+  
   const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
-  document.getElementById("summary-cards").innerHTML = `<div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div><div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div><div class="card c-accept"><div class="card-label">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div><div class="card c-reject"><div class="card-label">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div><div class="card c-accent"><div class="card-label">Avg Density</div><div class="card-val">${ds.avg}<span class="card-unit">kg/m³</span></div></div><div class="card"><div class="card-label">Avg Weight/Hole</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div>`;
+  
+  // 🟢 1. คำนวณค่าสถิติ Moisture (เฉพาะตัวที่มีค่า > 0)
+  const ms = calcStats(f.filter(r => r.moisture > 0), "moisture");
+
+  // 🟢 2. เพิ่มกล่องการ์ด Avg Moisture ต่อท้ายสุด
+  document.getElementById("summary-cards").innerHTML = `
+    <div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div>
+    <div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div>
+    <div class="card c-accept"><div class="card-label">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div>
+    <div class="card c-reject"><div class="card-label">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div>
+    <div class="card c-accent"><div class="card-label">Avg Density</div><div class="card-val">${ds.avg}<span class="card-unit">kg/m³</span></div></div>
+    <div class="card"><div class="card-label">Avg Weight/Hole</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--moisture)">Avg Moisture</div><div class="card-val">${ms.avg > 0 ? ms.avg.toFixed(2) : '-'}<span class="card-unit">%</span></div></div>
+  `;
+  
   document.getElementById("stat-grid").innerHTML = [{ title: "Density (kg/m³)", s: ds }, { title: "Filtered Weight/Hole (kg)", s: ws }, { title: "Filtered Max Depth (m)", s: ls }].map(({ title, s }) => `<div class="stat-box"><div class="stat-box-title">${title}</div><div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${s.avg}</span></div><div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${s.sd}</span></div><div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${s.min}</span></div><div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${s.max}</span></div></div>`).join("");
 }
 
@@ -601,15 +646,31 @@ function renderTable(f) {
   if (curPage > totalPages) curPage = totalPages;
   const startIdx = (curPage - 1) * rowsPerPage;
   const pagedData = sortedF.slice(startIdx, startIdx + rowsPerPage);
-  document.getElementById("table-body").innerHTML = pagedData.map(r => `<tr class="${selectedHole === r.hole ? "selected" : ""}" onclick="selectHole('${r.hole}')"><td>${r.date}</td> <td style="font-weight:600">${r.hole}</td> <td class="mono">${r.level.toFixed(2)}</td><td class="mono">${r.weight.toFixed(2)}</td> <td class="mono">${r.density.toFixed(4)}</td><td>${r.accCount > 0 ? `<span class="badge badge-accept">${r.accCount} Acc</span>` : ''}${r.rejCount > 0 ? `<span class="badge badge-reject">${r.rejCount} Rej</span>` : ''}</td></tr>`).join("");
+  
+  // 🟢 แสดงผล Moisture ในตาราง
+  document.getElementById("table-body").innerHTML = pagedData.map(r => `
+    <tr class="${selectedHole === r.hole ? "selected" : ""}" onclick="selectHole('${r.hole}')">
+      <td>${r.date}</td> 
+      <td style="font-weight:600">${r.hole}</td> 
+      <td class="mono">${r.level.toFixed(2)}</td>
+      <td class="mono">${r.weight.toFixed(2)}</td> 
+      <td class="mono">${r.density.toFixed(4)}</td>
+      <td class="mono" style="color:var(--moisture)">${r.moisture > 0 ? r.moisture.toFixed(2) + '%' : '-'}</td>
+      <td>
+        ${r.accCount > 0 ? `<span class="badge badge-accept">${r.accCount} Acc</span>` : ''}
+        ${r.rejCount > 0 ? `<span class="badge badge-reject">${r.rejCount} Rej</span>` : ''}
+      </td>
+    </tr>`).join("");
+    
   document.getElementById("page-info").textContent = `Showing ${f.length ? startIdx + 1 : 0}-${Math.min(startIdx + rowsPerPage, f.length)} of ${f.length}`;
   document.getElementById("btn-prev").disabled = curPage === 1; document.getElementById("btn-next").disabled = curPage === totalPages || f.length === 0;
 }
 
 function exportCSV() {
   const f = getFiltered(); if (!f.length) return alert("No data to export.");
-  let csv = "Date,Hole No.,Max Filtered Depth (m),Total Filtered Weight (kg),Avg Density,Accept Samples,Reject Samples\n";
-  f.forEach(r => csv += `"${r.date}","${r.hole}",${r.level},${r.weight},${r.density},${r.accCount},${r.rejCount}\n`);
+  // 🟢 เพิ่ม Moisture ลงในไฟล์ CSV ส่งออก
+  let csv = "Date,Hole No.,Max Filtered Depth (m),Total Filtered Weight (kg),Avg Density,Avg Moisture (%),Accept Samples,Reject Samples\n";
+  f.forEach(r => csv += `"${r.date}","${r.hole}",${r.level},${r.weight},${r.density},${r.moisture},${r.accCount},${r.rejCount}\n`);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = "QC_Data.csv"; a.click();
 }
 
@@ -622,7 +683,16 @@ function selectHole(h) {
       let badgeHtml = "";
       if (rec.rejCount === 0) badgeHtml = `<span class="badge badge-accept">100% Accept</span>`; else if (rec.accCount === 0) badgeHtml = `<span class="badge badge-reject">100% Reject</span>`; else badgeHtml = `<span class="badge badge-mixed">Mixed (${rec.accCount} Acc / ${rec.rejCount} Rej)</span>`;
       document.getElementById("detail-badge").innerHTML = badgeHtml;
-      document.getElementById("detail-meta").innerHTML = [["Date", rec.date], ["Filtered Depth", rec.level + " m"], ["Filtered Weight", rec.weight.toFixed(2) + " kg"], ["Avg Density", rec.density.toFixed(4) + " kg/m³"]].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
+      
+      // 🟢 เพิ่ม Moisture ในหน้าต่างย่อย (Detail Panel)
+      document.getElementById("detail-meta").innerHTML = [
+        ["Date", rec.date], 
+        ["Filtered Depth", rec.level + " m"], 
+        ["Filtered Weight", rec.weight.toFixed(2) + " kg"], 
+        ["Avg Density", rec.density.toFixed(4) + " kg/m³"],
+        ["Avg Moisture", rec.moisture > 0 ? rec.moisture.toFixed(2) + " %" : "N/A"]
+      ].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
+      
       const sampleSec = document.getElementById("sample-section");
       if (rec.samples.length > 0) {
         sampleSec.style.display = "block";
