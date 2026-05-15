@@ -631,14 +631,84 @@ function renderCharts(f) {
 
 function renderSummary(f) {
   let totalAcc = 0, totalRej = 0;
-  f.forEach(r => { totalAcc += r.accCount; totalRej += r.rejCount; });
+  
+  // 🟢 สร้างตัวแปรมารองรับการคำนวณแยก Accept / Reject
+  let accDenSum = 0, accDenCount = 0, rejDenSum = 0, rejDenCount = 0;
+  let accWtSum = 0, accWtCount = 0, rejWtSum = 0, rejWtCount = 0;
+  let accMoisSum = 0, accMoisCount = 0, rejMoisSum = 0, rejMoisCount = 0;
+
+  f.forEach(r => {
+    totalAcc += r.accCount;
+    totalRej += r.rejCount;
+    
+    // วนลูปดูทุกๆ Sample ย่อยในแต่ละหลุม
+    r.samples.forEach(s => {
+      let isRej = s.status.toLowerCase().includes("reject");
+      if (!isRej) { // กลุ่ม Accept
+        accDenSum += s.den; accDenCount++;
+        accWtSum += s.w; accWtCount++;
+        if (s.mois > 0) { accMoisSum += s.mois; accMoisCount++; }
+      } else {      // กลุ่ม Reject
+        rejDenSum += s.den; rejDenCount++;
+        rejWtSum += s.w; rejWtCount++;
+        if (s.mois > 0) { rejMoisSum += s.mois; rejMoisCount++; }
+      }
+    });
+  });
+
   let totalS = totalAcc + totalRej;
   
-  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
-  const ms = calcStats(f.filter(r => r.moisture > 0), "moisture");
+  // 🟢 ฟังก์ชันช่วยคำนวณค่าเฉลี่ย (ถ้าไม่มีข้อมูลให้แสดงขีด -)
+  const calcAvg = (sum, count, decimals) => count > 0 ? (sum / count).toFixed(decimals) : "-";
+  
+  // คำนวณ Density
+  let avgDenAcc = calcAvg(accDenSum, accDenCount, 4);
+  let avgDenRej = calcAvg(rejDenSum, rejDenCount, 4);
+  let avgDenTot = calcAvg(accDenSum + rejDenSum, accDenCount + rejDenCount, 4);
 
-  document.getElementById("summary-cards").innerHTML = `<div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div><div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div><div class="card c-accept"><div class="card-label">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div><div class="card c-reject"><div class="card-label">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div><div class="card c-accent"><div class="card-label">Avg Density</div><div class="card-val">${ds.avg}<span class="card-unit">kg/m³</span></div></div><div class="card"><div class="card-label">Avg Weight/Hole</div><div class="card-val">${(+ws.avg).toFixed(1)}<span class="card-unit">kg</span></div></div><div class="card"><div class="card-label" style="color:var(--moisture)">Avg Moisture</div><div class="card-val">${ms.avg > 0 ? ms.avg.toFixed(2) : '-'}<span class="card-unit">%</span></div></div>`;
-  document.getElementById("stat-grid").innerHTML = [{ title: "Density (kg/m³)", s: ds }, { title: "Filtered Weight/Hole (kg)", s: ws }, { title: "Filtered Max Depth (m)", s: ls }].map(({ title, s }) => `<div class="stat-box"><div class="stat-box-title">${title}</div><div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${s.avg}</span></div><div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${s.sd}</span></div><div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${s.min}</span></div><div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${s.max}</span></div></div>`).join("");
+  // คำนวณ Weight (เฉลี่ยต่อ 1 Sample)
+  let avgWtAcc = calcAvg(accWtSum, accWtCount, 2);
+  let avgWtRej = calcAvg(rejWtSum, rejWtCount, 2);
+  let avgWtTot = calcAvg(accWtSum + rejWtSum, accWtCount + rejWtCount, 2);
+
+  // คำนวณ Moisture
+  let avgMoisAcc = calcAvg(accMoisSum, accMoisCount, 2);
+  let avgMoisRej = calcAvg(rejMoisSum, rejMoisCount, 2);
+  let avgMoisTot = calcAvg(accMoisSum + rejMoisSum, accMoisCount + rejMoisCount, 2);
+
+  // 🟢 อัปเดตกล่องการ์ดทั้งหมด 13 กล่อง!
+  document.getElementById("summary-cards").innerHTML = `
+    <div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div>
+    <div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div>
+    <div class="card c-accept"><div class="card-label" style="color:var(--accept)">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div>
+    <div class="card c-reject"><div class="card-label" style="color:var(--reject)">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div>
+    
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Density (Accept)</div><div class="card-val">${avgDenAcc}<span class="card-unit">MT/m³</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Density (Reject)</div><div class="card-val">${avgDenRej}<span class="card-unit">MT/m³</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Density (All)</div><div class="card-val">${avgDenTot}<span class="card-unit">MT/m³</span></div></div>
+
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Wt/Sample (Accept)</div><div class="card-val">${avgWtAcc}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Wt/Sample (Reject)</div><div class="card-val">${avgWtRej}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Wt/Sample (All)</div><div class="card-val">${avgWtTot}<span class="card-unit">kg</span></div></div>
+
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Moisture (Accept)</div><div class="card-val">${avgMoisAcc}<span class="card-unit">%</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Moisture (Reject)</div><div class="card-val">${avgMoisRej}<span class="card-unit">%</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--moisture)">Avg Moisture (All)</div><div class="card-val">${avgMoisTot}<span class="card-unit">%</span></div></div>
+  `;
+
+  // ส่วนของตาราง Stat ด้านล่างคงเดิม
+  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
+  document.getElementById("stat-grid").innerHTML = [
+    { title: "Density (MT/m³)", s: ds }, { title: "Filtered Weight/Hole (kg)", s: ws }, { title: "Filtered Max Depth (m)", s: ls }
+  ].map(({ title, s }) => `
+    <div class="stat-box">
+      <div class="stat-box-title">${title}</div>
+      <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${s.avg}</span></div>
+      <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${s.sd}</span></div>
+      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${s.min}</span></div>
+      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${s.max}</span></div>
+    </div>
+  `).join("");
 }
 
 function handleSort(col) {
@@ -706,7 +776,7 @@ function selectHole(h) {
         ["Date", rec.date], 
         ["Filtered Depth", rec.level + " m"], 
         ["Filtered Weight", rec.weight.toFixed(2) + " kg"], 
-        ["Avg Density", rec.density.toFixed(4) + " kg/m³"],
+        ["Avg Density", rec.density.toFixed(4) + " MT/m³"],
         ["Avg Moisture", rec.moisture > 0 ? rec.moisture.toFixed(2) + " %" : "N/A"]
       ].map(([k, v]) => `<div class="meta-item"><div class="meta-lbl">${k}</div><div class="meta-val">${v}</div></div>`).join("");
       
