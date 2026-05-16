@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BLCP Sampling QC Dashboard V14 (Stockpile Calculator)</title>
+<title>BLCP Sampling QC Dashboard V15 (Time Calculator & Pro Stats)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -147,8 +147,8 @@
   .badge-accept { background: var(--accept-bg); color: var(--accept); border: 1px solid rgba(45,212,160,0.2); }
   .badge-reject { background: var(--reject-bg); color: var(--reject); border: 1px solid rgba(248,112,96,0.2); }
 
-  /* 🟢 CSS สำหรับระบบคำนวณ Stockpile */
-  .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 24px; }
+  /* CSS สำหรับระบบคำนวณ Stockpile & Time */
+  .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 24px; }
   .calc-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
   .calc-title { font-size: 16px; font-weight: 600; color: var(--accent); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;}
   .calc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; }
@@ -213,6 +213,50 @@
         </div>
 
         <div class="progress-grid" id="progress-container"></div>
+
+        <div class="chart-box-wide" style="margin-bottom: 28px;">
+          <div class="chart-title" style="font-size: 16px; color: var(--accent);">⏱️ Drilling Time & Target Calculator</div>
+          <div class="chart-sub">คำนวณวันทำงานและเป้าหมายความลึกที่ต้องเจาะต่อวัน (อ้างอิงจาก Remaining Depth ของแต่ละกอง)</div>
+          
+          <div class="calc-grid" style="margin-top: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+            <div class="calc-box" style="padding: 16px;">
+               <div class="calc-row">
+                 <span style="color:var(--muted)">Reference Pile</span> 
+                 <select id="time-target-sel" class="calc-select" onchange="calcDrillTime()" style="width: 160px; text-align: left;">
+                    <option value="Overall (without Bedding)">Overall Project</option>
+                    <option value="A1">Pile A1</option>
+                    <option value="A2">Pile A2</option>
+                    <option value="A3">Pile A3</option>
+                    <option value="B3">Pile B3</option>
+                    <option value="CD1">Pile CD1</option>
+                    <option value="CD2">Pile CD2</option>
+                    <option value="CD4">Pile CD4</option>
+                 </select>
+               </div>
+               <div class="calc-row" style="margin-top:12px;"><span>Remaining Depth</span> <span id="time-remain-depth" class="calc-res">0.0 m</span></div>
+            </div>
+
+            <div class="calc-box" style="padding: 16px;">
+               <div class="calc-row"><span>Start Date</span> <input type="date" id="time-start" class="calc-input" onchange="calcDrillTime()"></div>
+               <div class="calc-row"><span>End Date</span> <input type="date" id="time-end" class="calc-input" onchange="calcDrillTime()"></div>
+               <div class="calc-row"><span>Working Hours/Day</span> <input type="number" id="time-hrs" class="calc-input" placeholder="e.g. 8" value="8" oninput="calcDrillTime()"></div>
+               <div class="calc-row" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                 <span style="color:var(--warning); font-weight:600;">Day Remaining</span> <span id="time-days" class="calc-res" style="color:var(--warning);">0 Days</span>
+               </div>
+            </div>
+
+            <div class="calc-box" style="background: rgba(45,212,160,0.05); border-color: rgba(45,212,160,0.2); padding: 16px; display: flex; flex-direction: column; justify-content: center;">
+               <div class="calc-row" style="font-size: 14px;">
+                 <span style="color:var(--accept); font-weight: 600;">Target Depth/Day</span> 
+                 <span id="time-target-day" class="calc-diff" style="color:var(--accept); font-size: 24px;">0.00 m</span>
+               </div>
+               <div class="calc-row" style="font-size: 14px; margin-top: 16px;">
+                 <span style="color:var(--accent); font-weight: 600;">Target Depth/Hour</span> 
+                 <span id="time-target-hr" class="calc-diff" style="color:var(--accent); font-size: 20px;">0.00 m</span>
+               </div>
+            </div>
+          </div>
+        </div>
 
         <div class="filter-row">
           <span class="filter-label">Filter:</span>
@@ -366,7 +410,7 @@
         </div>
 
       </main>
-      <div class="footer">BLCP Sampling QC Dashboard V14 · Stockpile Calculator Integrated</div>
+      <div class="footer">BLCP Sampling QC Dashboard V15 · Advanced Stockpile & Time Calc</div>
     </div> <div id="view-layout" class="view-section">
       <main class="main">
         <div class="upload-zone" id="layout-dropzone" style="margin-bottom: 24px;">
@@ -381,7 +425,7 @@
 
         <div class="chart-box-wide">
           <div class="chart-title" style="font-size: 18px;">Layout Stockpile</div>
-          <div class="chart-sub">แผนผังแสดงจุดกองถ่านหิน (รูปภาพล่าสุด)</div>
+          <div class="chart-sub">แผนผังแสดงจุดกองถ่านหิน (อัปเดตแบบ Real-time)</div>
           
           <div style="text-align: center; padding: 20px; border: 2px dashed var(--border2); border-radius: var(--radius); margin-top: 20px; background: var(--bg3);" id="layout-display-zone">
             <div id="layout-placeholder" style="padding: 40px 0;">
@@ -398,7 +442,7 @@
         <div class="calc-grid" id="calc-grid"></div>
 
       </main>
-      <div class="footer">BLCP Sampling QC Dashboard V14</div>
+      <div class="footer">BLCP Sampling QC Dashboard V15</div>
     </div> </div> </div> <script>
 // --- UI Layout Functions ---
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
@@ -446,11 +490,13 @@ let weightMinF = "", weightMaxF = "";
 let selectedHole = null;
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
 
+// 🟢 ตัวแปรไว้จำค่า Remaining Depth เพื่อส่งไปหน้า Time Calculator
+window.globalRemainDepths = {};
+
 let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null;
 let chartHist = null, chartStatus = null, chartWeight = null, chartMoisture = null, chartWeightCorr = null; 
 
-// 🟢 รายชื่อ Piles ทั้งหมดสำหรับกล่องคำนวณ Layout
-const TARGET_PILES = ["A1", "A2", "B3", "CD1", "CD2", "CD4"];
+const TARGET_PILES = ["A1", "A2", "A3", "B3", "CD1", "CD2", "CD4"];
 
 // --- Database Operations ---
 function saveToDB(data) { 
@@ -627,7 +673,11 @@ const GRID = "rgba(255,255,255,0.05)", TICK = "#7a8099";
 
 // 🟢 1. อัปเดต Progress Boxes
 function renderProgress() {
-  let s = { 'Overall (without Bedding)': {t:0, a:0}, A1: {t:0, a:0}, A2: {t:0, a:0}, B3: {t:0, a:0}, CD1: {t:0, a:0}, CD2: {t:0, a:0}, CD4: {t:0, a:0} };
+  let s = { 
+    'Overall (without Bedding)': {t:0, a:0}, 
+    A1: {t:0, a:0}, A2: {t:0, a:0}, A3: {t:0, a:0}, B1: {t:0, a:0}, B2: {t:0, a:0}, B3: {t:0, a:0}, 
+    CD1: {t:0, a:0}, CD2: {t:0, a:0}, CD3: {t:0, a:0}, CD4: {t:0, a:0} 
+  };
   
   allData.forEach(h => {
       let p = h.pile;
@@ -637,19 +687,21 @@ function renderProgress() {
       if(s[p]) { s[p].t += t; s[p].a += a; }
   });
   
-  const tg = { 'Overall (without Bedding)': 1550, A1: 404, A2: 0, B3: 0, CD1: 286, CD2: 392, CD4: 468 };
+  const tg = { 'Overall (without Bedding)': 1550, A1: 404, A2: 0, A3: 0, B1: 0, B2: 0, B3: 0, CD1: 286, CD2: 392, CD3: 0, CD4: 468 };
   let html = '';
+  window.globalRemainDepths = {}; // เคลียร์ค่าตัวแปรกลาง
+
   for(let k in tg) {
-      // 💡 ดักจับกรณี Target = 0 ป้องกันการ Error (หารด้วยศูนย์)
       let pt = tg[k] > 0 ? Math.min((s[k].t / tg[k])*100, 100).toFixed(1) : (s[k].t > 0 ? "100.0" : "0.0");
       let pa = tg[k] > 0 ? Math.min((s[k].a / tg[k])*100, 100).toFixed(1) : (s[k].a > 0 ? "100.0" : "0.0");
       
       let remain = Math.max(0, tg[k] - s[k].a); 
-      
-      // 🟢 คำนวณ Depth (หาร 2)
       let targetDepth = (tg[k] / 2).toFixed(1);
       let remainDepth = (remain / 2).toFixed(1);
       
+      // บันทึกค่าลงตัวแปรกลาง เพื่อนำไปใช้ใน Time Calculator
+      window.globalRemainDepths[k] = parseFloat(remainDepth);
+
       html += `
       <div class="prog-card-sm">
         <div class="prog-title-sm" style="align-items: flex-start;">
@@ -680,6 +732,43 @@ function renderProgress() {
   }
   document.getElementById("progress-container").innerHTML = html;
 }
+
+// 🟢 2. ฟังก์ชันคำนวณ Time & Target Depth (อัปเดตนับจาก Today)
+window.calcDrillTime = function() {
+   const target = document.getElementById('time-target-sel').value;
+   const depth = window.globalRemainDepths[target] || 0;
+   document.getElementById('time-remain-depth').textContent = depth.toFixed(1) + " m";
+
+   const end = new Date(document.getElementById('time-end').value);
+   const hrs = parseFloat(document.getElementById('time-hrs').value) || 0;
+
+   // 🟢 ดึงข้อมูล "วันนี้" และตั้งเวลาเป็นเที่ยงคืนตรงเพื่อให้ลบวันได้เป๊ะ
+   const today = new Date();
+   today.setHours(0, 0, 0, 0); 
+
+   let days = 0;
+   if (!isNaN(end.getTime())) {
+       // ปรับ End Date ให้เป็นเวลาเที่ยงคืนตรงเช่นกัน
+       const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+       const diffTime = endMidnight - today;
+       
+       days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+       // ถ้านับรวมวันนี้ด้วย (Inclusive) ให้บวก 1, ถ้าเลยวันไปแล้วให้เป็น 0
+       days = days >= 0 ? days + 1 : 0; 
+   }
+   
+   document.getElementById('time-days').textContent = days + " Days";
+
+   let targetPerDay = 0;
+   let targetPerHr = 0;
+
+   if (days > 0 && depth > 0) targetPerDay = depth / days;
+   if (targetPerDay > 0 && hrs > 0) targetPerHr = targetPerDay / hrs;
+
+   document.getElementById('time-target-day').textContent = targetPerDay.toFixed(2) + " m";
+   document.getElementById('time-target-hr').textContent = targetPerHr.toFixed(2) + " m";
+}
+
 
 function renderSummary(f) {
   let totalAcc = 0, totalRej = 0;
@@ -967,10 +1056,11 @@ window.removeHole = function(h) { holeF = holeF.filter(x => x !== h); updateHole
 function render() {
   const f = getFiltered(); 
   renderProgress(); 
+  calcDrillTime(); // 🟢 สั่งอัปเดต Time Calculator
   renderSummary(f); 
   renderCharts(f); 
   renderTable(f);
-  updateLayoutDensity(); // 🟢 อัปเดตข้อมูล Density ไปที่กล่องคำนวณ Stockpile ด้วย
+  updateLayoutDensity(); 
 
   document.getElementById("record-count").textContent = allData.length;
   document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || machineF !== "All" || holeF.length > 0 || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF || weightMinF || weightMaxF) ? "" : "none";
@@ -1029,7 +1119,7 @@ document.getElementById("clear-btn").addEventListener("click", () => {
 
 document.getElementById("clear-db-btn").addEventListener("click", clearDB);
 
-// // ==========================================
+// ==========================================
 // 6. LAYOUT IMAGE LOGIC (Cloud Sync)
 // ==========================================
 const lDz = document.getElementById("layout-dropzone"), lFi = document.getElementById("layout-file-input");
@@ -1044,25 +1134,14 @@ lFi.addEventListener("change", e => { if (e.target.files[0]) processImage(e.targ
 
 function processImage(file) {
   if (!file.type.startsWith('image/')) { alert('กรุณาอัปโหลดไฟล์รูปภาพ (PNG, JPG) เท่านั้นครับ'); return; }
-  
-  // 💡 ป้องกันไฟล์ใหญ่เกินไปทำฐานข้อมูลค้าง (จำกัดไม่เกิน 2MB)
-  if (file.size > 2 * 1024 * 1024) {
-      alert('ขนาดรูปภาพใหญ่เกินไปครับ (จำกัด 2MB) รบกวนย่อขนาดรูปก่อนอัปโหลดนะครับ');
-      return;
-  }
+  if (file.size > 2 * 1024 * 1024) { alert('ขนาดรูปภาพใหญ่เกินไปครับ (จำกัด 2MB) รบกวนย่อขนาดรูปก่อนอัปโหลดนะครับ'); return; }
 
   const reader = new FileReader();
   reader.onload = e => {
     const base64Data = e.target.result; 
-    
-    // 🟢 อัปโหลดขึ้น Firebase Cloud ทันที
     if (database) {
-      database.ref("layout_map_v1").set(base64Data)
-        .then(() => console.log("อัปโหลดรูปแผนผังขึ้นคลาวด์สำเร็จ!"))
-        .catch(err => { console.error("อัปโหลดรูปไม่สำเร็จ:", err); alert("อัปโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"); });
-    } else {
-      displayLayout(base64Data); // ถ้าไม่มีคลาวด์ ให้โชว์แค่ในเครื่องไปก่อน
-    }
+      database.ref("layout_map_v1").set(base64Data).catch(err => { console.error("อัปโหลดรูปไม่สำเร็จ:", err); alert("อัปโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"); });
+    } else displayLayout(base64Data);
   };
   reader.readAsDataURL(file);
 }
@@ -1072,7 +1151,6 @@ function displayLayout(srcData) {
   else { lImg.src = ""; lImg.style.display = "none"; lBtn.style.display = "none"; lPh.style.display = "block"; }
 }
 
-// ปุ่มลบรูปภาพ (ลบออกจากคลาวด์ด้วย)
 lBtn.addEventListener("click", () => { 
   if(confirm("ต้องการลบรูปแผนผังนี้ออกจากระบบคลาวด์ใช่หรือไม่? (รูปจะหายไปจากทุกเครื่อง)")) { 
     if (database) database.ref("layout_map_v1").remove();
@@ -1080,15 +1158,15 @@ lBtn.addEventListener("click", () => {
   } 
 });
 
-// 🟢 โหลดรูปภาพจาก Firebase แบบ Real-time (เปิดเครื่องไหนก็อัปเดตพร้อมกัน)
 if (database) {
   database.ref("layout_map_v1").on('value', (snapshot) => {
     if (snapshot.exists()) displayLayout(snapshot.val());
     else displayLayout(null);
   });
 }
+
 // ==========================================
-// 🟢 7. STOCKPILE INVENTORY CALCULATOR
+// 7. STOCKPILE INVENTORY CALCULATOR
 // ==========================================
 function initLayoutCalcs() {
   let html = '';
@@ -1116,7 +1194,6 @@ function initLayoutCalcs() {
   document.getElementById("calc-grid").innerHTML = html;
 }
 
-// อัปเดตค่า Density เข้า Dropdown ของแต่ละกล่องทุกครั้งที่ข้อมูลเปลี่ยน
 function updateLayoutDensity() {
   let pStats = {};
   TARGET_PILES.forEach(p => pStats[p] = { sumAll:0, cAll:0, sumAcc:0, cAcc:0 });
@@ -1142,12 +1219,11 @@ function updateLayoutDensity() {
           sel.dataset.all = vAll;
           document.getElementById(`opt-acc-${p}`).textContent = `Accept: ${vAcc.toFixed(4)}`;
           document.getElementById(`opt-all-${p}`).textContent = `All: ${vAll.toFixed(4)}`;
-          calcVol(p); // คำนวณอัปเดตอัตโนมัติ
+          calcVol(p); 
       }
   });
 }
 
-// สูตรคำนวณ (Survey Volume x Density) และหาค่า Diff %
 window.calcVol = function(p) {
   let bk = parseFloat(document.getElementById(`bk-${p}`).value);
   let sv = parseFloat(document.getElementById(`sv-${p}`).value);
@@ -1168,7 +1244,6 @@ window.calcVol = function(p) {
   let diff = ((surveyTons - bk) / bk) * 100;
 
   stEl.textContent = surveyTons.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  
   dfEl.textContent = (diff > 0 ? "+" : "") + diff.toFixed(2) + " %";
   if (diff > 0) dfEl.style.color = "var(--accept)";
   else if (diff < 0) dfEl.style.color = "var(--reject)";
@@ -1176,7 +1251,7 @@ window.calcVol = function(p) {
 }
 
 // 🟢 Start App
-initLayoutCalcs(); // สร้างกล่องคำนวณก่อน
+initLayoutCalcs(); 
 window.onload = loadFromDB;
 </script>
 </body>
