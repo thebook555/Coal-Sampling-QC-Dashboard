@@ -1010,8 +1010,8 @@ document.getElementById("clear-btn").addEventListener("click", () => {
 
 document.getElementById("clear-db-btn").addEventListener("click", clearDB);
 
-// ==========================================
-// 6. LAYOUT IMAGE LOGIC
+// // ==========================================
+// 6. LAYOUT IMAGE LOGIC (Cloud Sync)
 // ==========================================
 const lDz = document.getElementById("layout-dropzone"), lFi = document.getElementById("layout-file-input");
 const lImg = document.getElementById("layout-img"), lPh = document.getElementById("layout-placeholder"), lBtn = document.getElementById("clear-layout-btn");
@@ -1025,10 +1025,25 @@ lFi.addEventListener("change", e => { if (e.target.files[0]) processImage(e.targ
 
 function processImage(file) {
   if (!file.type.startsWith('image/')) { alert('กรุณาอัปโหลดไฟล์รูปภาพ (PNG, JPG) เท่านั้นครับ'); return; }
+  
+  // 💡 ป้องกันไฟล์ใหญ่เกินไปทำฐานข้อมูลค้าง (จำกัดไม่เกิน 2MB)
+  if (file.size > 2 * 1024 * 1024) {
+      alert('ขนาดรูปภาพใหญ่เกินไปครับ (จำกัด 2MB) รบกวนย่อขนาดรูปก่อนอัปโหลดนะครับ');
+      return;
+  }
+
   const reader = new FileReader();
   reader.onload = e => {
-    const base64Data = e.target.result; displayLayout(base64Data);
-    try { localStorage.setItem("savedLayoutImage", base64Data); } catch (err) { console.warn("รูปภาพมีขนาดใหญ่เกินกว่าที่เบราว์เซอร์จะจำไว้ได้"); }
+    const base64Data = e.target.result; 
+    
+    // 🟢 อัปโหลดขึ้น Firebase Cloud ทันที
+    if (database) {
+      database.ref("layout_map_v1").set(base64Data)
+        .then(() => console.log("อัปโหลดรูปแผนผังขึ้นคลาวด์สำเร็จ!"))
+        .catch(err => { console.error("อัปโหลดรูปไม่สำเร็จ:", err); alert("อัปโหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"); });
+    } else {
+      displayLayout(base64Data); // ถ้าไม่มีคลาวด์ ให้โชว์แค่ในเครื่องไปก่อน
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -1038,9 +1053,21 @@ function displayLayout(srcData) {
   else { lImg.src = ""; lImg.style.display = "none"; lBtn.style.display = "none"; lPh.style.display = "block"; }
 }
 
-lBtn.addEventListener("click", () => { if(confirm("ต้องการลบรูปแผนผังนี้ใช่หรือไม่?")) { localStorage.removeItem("savedLayoutImage"); displayLayout(null); } });
-const savedImg = localStorage.getItem("savedLayoutImage"); if (savedImg) displayLayout(savedImg);
+// ปุ่มลบรูปภาพ (ลบออกจากคลาวด์ด้วย)
+lBtn.addEventListener("click", () => { 
+  if(confirm("ต้องการลบรูปแผนผังนี้ออกจากระบบคลาวด์ใช่หรือไม่? (รูปจะหายไปจากทุกเครื่อง)")) { 
+    if (database) database.ref("layout_map_v1").remove();
+    else displayLayout(null);
+  } 
+});
 
+// 🟢 โหลดรูปภาพจาก Firebase แบบ Real-time (เปิดเครื่องไหนก็อัปเดตพร้อมกัน)
+if (database) {
+  database.ref("layout_map_v1").on('value', (snapshot) => {
+    if (snapshot.exists()) displayLayout(snapshot.val());
+    else displayLayout(null);
+  });
+}
 // ==========================================
 // 🟢 7. STOCKPILE INVENTORY CALCULATOR
 // ==========================================
