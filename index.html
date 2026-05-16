@@ -3,16 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BLCP Sampling QC Dashboard V9 (Pro Analytics)</title>
+<title>BLCP Sampling QC Dashboard V14 (Stockpile Calculator)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
   :root {
     --bg: #0f1117; --bg2: #181c26; --bg3: #1e2330; --surface: #242938;
@@ -25,7 +24,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { font-size: 14px; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; overflow-x: hidden; }
 
   #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,17,23,0.8); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   .spinner { width: 48px; height: 48px; border: 4px solid var(--border2); border-bottom-color: var(--accent); border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; margin-bottom: 16px; }
@@ -39,24 +38,46 @@
   #status-bar { font-size: 12px; color: var(--muted); background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; }
   #status-bar span { color: var(--accept); font-weight: 500; }
 
-  .main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+  .app-body { display: flex; min-height: calc(100vh - 73px); width: 100%; }
+  .sidebar { width: 240px; background: var(--bg2); border-right: 1px solid var(--border); padding: 20px 0; flex-shrink: 0; transition: width 0.3s ease; position: relative; overflow-x: hidden; }
+  .sidebar.collapsed { width: 75px; padding-top: 20px; }
+  .sidebar.collapsed .nav-text { display: none; }
+  .sidebar.collapsed .toggle-btn { justify-content: center; padding: 0 0 14px 0; }
+  .sidebar.collapsed .toggle-icon { transform: rotate(180deg); }
+  .toggle-btn { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px 14px; cursor: pointer; color: var(--muted); border-bottom: 1px solid var(--border); margin-bottom: 14px; transition: color 0.2s; }
+  .toggle-btn:hover { color: var(--text); }
+  .toggle-icon { font-size: 14px; transition: transform 0.3s; }
+
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 14px 28px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; border-left: 3px solid transparent; white-space: nowrap; }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .nav-item.active { color: var(--accent); background: rgba(79,142,247,0.08); border-left-color: var(--accent); }
+  .nav-icon { font-size: 18px; min-width: 20px; text-align: center; }
+  
+  .content-area { flex: 1; overflow-x: hidden; background: var(--bg); }
+  .view-section { display: none; }
+  .view-section.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .main { padding: 28px 32px; max-width: 1500px; margin: 0 auto; }
+  
   .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 20px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; background: var(--bg2); margin-bottom: 24px; transition: all .2s; }
   .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.06); }
   .upload-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); background: rgba(79,142,247,0.12); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
   .upload-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
   .upload-sub { font-size: 12px; color: var(--muted); }
-  .upload-btn { margin-left: auto; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .upload-btn { margin-left: auto; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s;}
+  .upload-btn:hover { opacity: .85; }
 
-  /* 🟢 ระบบ Progress แบบใหม่ */
+  /* Progress Grid */
   .progress-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
-  .prog-card-sm { background: var(--bg2); padding: 18px; border-radius: var(--radius); border: 1px solid var(--border); }
+  .prog-card-sm { background: var(--bg2); padding: 18px; border-radius: var(--radius); border: 1px solid var(--border); display: flex; flex-direction: column;}
   .prog-title-sm { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;}
   .prog-track-sm { background: var(--bg3); border-radius: 6px; height: 8px; width: 100%; overflow: hidden; margin-top: 6px; position: relative; }
   .prog-fill-tot { background: #4f8ef7; height: 100%; width: 0%; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
   .prog-fill-acc { background: #2dd4a0; height: 100%; width: 0%; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
   .prog-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 10px; }
 
-  /* 🟢 ระบบฟิลเตอร์และ Tag Hole */
+  /* Filters */
   .filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 24px; }
   .filter-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; }
   .pill-group { display: flex; gap: 6px; }
@@ -77,7 +98,7 @@
   .hole-tag { background: rgba(79,142,247,0.1); border: 1px solid rgba(79,142,247,0.3); color: var(--accent); padding: 4px 12px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; font-weight: 500;}
   .hole-tag-close { color: var(--reject); cursor: pointer; font-size: 14px; line-height: 1; margin-bottom: 2px;}
 
-  /* ── CARDS & CHARTS ── */
+  /* Cards & Stats */
   .cards-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
   .card-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; margin-bottom: 8px; }
@@ -89,6 +110,7 @@
   .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .stat-row:last-child { border-bottom: none; }
   
+  /* Charts */
   .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .chart-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
   .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
@@ -98,6 +120,7 @@
   .leg-dot { width: 8px; height: 8px; border-radius: 2px; }
   .chart-box-wide { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
 
+  /* Detail Panel */
   .detail-panel { background: var(--bg2); border: 1px solid var(--accent); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; display: none; }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
   .detail-hole { font-size: 20px; font-weight: 700; }
@@ -107,6 +130,7 @@
   .meta-val { font-size: 15px; font-weight: 600; }
   .close-btn { background: var(--bg3); border: 1px solid var(--border2); color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
 
+  /* Table */
   .table-section { margin-bottom: 28px; }
   .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .section-title { font-size: 14px; font-weight: 600; }
@@ -122,6 +146,16 @@
   .badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600; margin-right: 4px; display: inline-block; }
   .badge-accept { background: var(--accept-bg); color: var(--accept); border: 1px solid rgba(45,212,160,0.2); }
   .badge-reject { background: var(--reject-bg); color: var(--reject); border: 1px solid rgba(248,112,96,0.2); }
+
+  /* 🟢 CSS สำหรับระบบคำนวณ Stockpile */
+  .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 24px; }
+  .calc-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .calc-title { font-size: 16px; font-weight: 600; color: var(--accent); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;}
+  .calc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; }
+  .calc-input { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: 6px; padding: 6px 10px; width: 140px; text-align: right; outline: none; font-family: 'DM Mono', monospace;}
+  .calc-select { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: 6px; padding: 6px; width: 140px; outline: none; font-family: 'DM Mono', monospace;}
+  .calc-res { font-size: 15px; font-weight: 700; color: var(--text); }
+  .calc-diff { font-weight: 700; font-size: 15px; }
 
   .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -149,174 +183,237 @@
   </div>
 </header>
 
-<main class="main">
-
-  <div class="upload-zone" id="dropzone">
-    <div class="upload-icon">📂</div>
-    <div>
-      <div class="upload-title">Update Dashboard Data</div>
-      <div class="upload-sub" id="upload-hint">Drop your .xlsx file (Drilling Data) here to compile all sheets automatically</div>
-    </div>
-    <button class="upload-btn" id="upload-btn">Upload File</button>
-    <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
-  </div>
-
-  <div class="progress-grid" id="progress-container"></div>
-
-  <div class="filter-row">
-    <span class="filter-label">Filter:</span>
-    <div class="pill-group">
-      <button class="pill active-all" data-s="All">All</button>
-      <button class="pill" data-s="Accept">✓ Accept</button>
-      <button class="pill" data-s="Reject">✕ Reject</button>
-    </div>
-    
-    <select class="filter-select" id="machine-select"><option value="All">All Machines</option></select>
-    
-    <select class="filter-select" id="group-select"><option value="All">All Piles</option></select>
-    <select class="filter-select" id="date-select"><option value="All">All Dates</option></select>
-    
-    <select class="filter-select" id="hole-select" style="background: rgba(79,142,247,0.1); color: var(--accent); font-weight: 600; border-color: var(--accent);">
-      <option value="All">➕ Add Hole to Filter</option>
-    </select>
-    
-    <input type="text" id="search-hole" class="filter-input" placeholder="Search Hole...">
-
-    <div class="range-group">
-      <span style="font-size: 11px; color: var(--muted);">Depth:</span>
-      <input type="number" id="level-min" class="range-input" placeholder="Min">
-      <span style="color: var(--muted);">-</span>
-      <input type="number" id="level-max" class="range-input" placeholder="Max">
-    </div>
-
-    <div class="range-group">
-      <span style="font-size: 11px; color: var(--muted);">Density:</span>
-      <input type="number" id="density-min" class="range-input" placeholder="Min">
-      <span style="color: var(--muted);">-</span>
-      <input type="number" id="density-max" class="range-input" placeholder="Max">
-    </div>
-
-    <button class="clear-btn" id="clear-btn" style="display:none">✕ Clear</button>
-    <button class="clear-btn" id="clear-db-btn" style="color: var(--reject); border: 1px solid var(--reject-bg); display: none;">🗑️ Clear Cloud Data</button>
-  </div>
+<div class="app-body">
   
-  <div id="hole-tags" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 24px;"></div>
+  <nav class="sidebar" id="sidebar">
+    <div class="toggle-btn" onclick="toggleSidebar()">
+      <span class="toggle-icon">◀</span>
+    </div>
+    <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard', event)">
+      <span class="nav-icon">📊</span> <span class="nav-text">Dashboard</span>
+    </a>
+    <a href="#" class="nav-item" id="nav-layout" onclick="switchTab('layout', event)">
+      <span class="nav-icon">🗺️</span> <span class="nav-text">Layout Stockpile</span>
+    </a>
+  </nav>
 
-  <div class="cards-row" id="summary-cards"></div>
-  <div class="stat-grid" id="stat-grid"></div>
+  <div class="content-area">
+    
+    <div id="view-dashboard" class="view-section active">
+      <main class="main">
 
-  <div class="charts-row">
-    <div class="chart-box">
-      <div class="chart-title">Trend: Accept Rate (Yield)</div>
-      <div class="chart-sub">% of accepted SAMPLES over time</div>
-      <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
-    </div>
-    <div class="chart-box">
-      <div class="chart-title">Status Overview</div>
-      <div class="chart-sub">Accept vs Reject samples by date</div>
-      <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
-    </div>
-  </div>
+        <div class="upload-zone" id="dropzone">
+          <div class="upload-icon">📂</div>
+          <div>
+            <div class="upload-title">Update Dashboard Data</div>
+            <div class="upload-sub">Drop your .xlsx file (Drilling Data) here to compile all sheets automatically</div>
+          </div>
+          <button class="upload-btn" id="upload-btn">Upload File</button>
+          <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+        </div>
 
-  <div class="charts-row">
-    <div class="chart-box">
-      <div class="chart-title" id="corr-title">Correlation: Depth vs Density</div>
-      <div class="chart-sub">Does depth affect density? (Based on filtered samples)</div>
-      <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
-    </div>
-    <div class="chart-box">
-      <div class="chart-title" id="corr-weight-title">Correlation: Depth vs Weight</div>
-      <div class="chart-sub">Does depth affect total weight? (Based on filtered samples)</div>
-      <div style="position:relative;height:240px"><canvas id="weight-corr-chart"></canvas></div>
-    </div>
-  </div>
-  
-  <div class="charts-row">
-    <div class="chart-box">
-      <div class="chart-title">Data Distribution: Density</div>
-      <div class="chart-sub">Histogram of sample densities</div>
-      <div style="position:relative;height:240px"><canvas id="hist-chart"></canvas></div>
-    </div>
-  </div>
+        <div class="progress-grid" id="progress-container"></div>
 
-  <div class="chart-box-wide" style="margin-bottom: 24px;">
-    <div class="chart-title">Weight Distribution (Total weight per hole)</div>
-    <div class="chart-sub">Check for missing weight outside the warning lines (±1 SD)</div>
-    <div style="position:relative;height:260px;width:100%"><canvas id="weight-chart"></canvas></div>
-    <div class="chart-legend">
-      <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average Weight</div>
-      <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
-    </div>
-  </div>
+        <div class="filter-row">
+          <span class="filter-label">Filter:</span>
+          <div class="pill-group">
+            <button class="pill active-all" data-s="All">All</button>
+            <button class="pill" data-s="Accept">✓ Accept</button>
+            <button class="pill" data-s="Reject">✕ Reject</button>
+          </div>
+          
+          <select class="filter-select" id="machine-select"><option value="All">All Machines</option></select>
+          <select class="filter-select" id="group-select"><option value="All">All Piles</option></select>
+          <select class="filter-select" id="date-select"><option value="All">All Dates</option></select>
+          
+          <select class="filter-select" id="hole-select" style="background: rgba(79,142,247,0.1); color: var(--accent); font-weight: 600; border-color: var(--accent);">
+            <option value="All">➕ Add Hole to Filter</option>
+          </select>
+          
+          <input type="text" id="search-hole" class="filter-input" placeholder="Search Hole...">
 
-  <div class="chart-box-wide">
-    <div class="chart-title">Moisture by Hole</div>
-    <div class="chart-sub">Average Total Moisture (%) per hole</div>
-    <div style="position:relative;height:260px;width:100%"><canvas id="moisture-chart"></canvas></div>
-  </div>
+          <div class="range-group">
+            <span style="font-size: 11px; color: var(--muted);">Depth:</span>
+            <input type="number" id="level-min" class="range-input" placeholder="Min">
+            <span style="color: var(--muted);">-</span>
+            <input type="number" id="level-max" class="range-input" placeholder="Max">
+          </div>
+          <div class="range-group">
+            <span style="font-size: 11px; color: var(--muted);">Density:</span>
+            <input type="number" id="density-min" class="range-input" placeholder="Min">
+            <span style="color: var(--muted);">-</span>
+            <input type="number" id="density-max" class="range-input" placeholder="Max">
+          </div>
+          <div class="range-group">
+            <span style="font-size: 11px; color: var(--muted);">Weight:</span>
+            <input type="number" id="weight-min" class="range-input" placeholder="Min">
+            <span style="color: var(--muted);">-</span>
+            <input type="number" id="weight-max" class="range-input" placeholder="Max">
+          </div>
 
-  <div class="chart-box-wide">
-    <div class="chart-title">Density by Hole (Average of valid samples)</div>
-    <div class="chart-sub">Check for outliers outside the warning lines (±1 SD)</div>
-    <div id="density-wrap" style="position:relative;width:100%"><canvas id="density-chart"></canvas></div>
-    <div class="chart-legend">
-      <div class="leg-item"><div class="leg-dot" style="background:#2dd4a0"></div>Accept Proportion</div>
-      <div class="leg-item"><div class="leg-dot" style="background:#f87060"></div>Reject Proportion</div>
-      <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average Density</div>
-      <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
-    </div>
-  </div>
+          <button class="clear-btn" id="clear-btn" style="display:none">✕ Clear</button>
+          <button class="clear-btn" id="clear-db-btn" style="color: var(--reject); border: 1px solid var(--reject-bg); display: none;">🗑️ Clear Cloud Data</button>
+        </div>
+        
+        <div id="hole-tags" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 24px;"></div>
 
-  <div class="detail-panel" id="detail-panel">
-    <div class="detail-header">
-      <div><div class="detail-hole" id="detail-hole">—</div><div id="detail-badge" style="margin-top:6px"></div></div>
-      <button class="close-btn" onclick="closeDetail()">✕</button>
-    </div>
-    <div class="detail-meta-grid" id="detail-meta"></div>
-    <div id="sample-section">
-      <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin-bottom:10px">Sample Measurements (Weight vs Depth)</div>
-      <div style="position:relative;height:180px"><canvas id="sample-chart"></canvas></div>
-    </div>
-  </div>
+        <div class="cards-row" id="summary-cards"></div>
+        <div class="stat-grid" id="stat-grid"></div>
 
-  <div class="table-section">
-    <div class="section-header">
-      <div class="section-title">Hole Aggregations</div>
-      <button onclick="exportCSV()" style="background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">📥 Export to CSV</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th onclick="handleSort('date')">Date <span id="sort-date"></span></th>
-            <th onclick="handleSort('machine')">Machine <span id="sort-machine"></span></th>
-            <th onclick="handleSort('hole')">Hole No. <span id="sort-hole"></span></th>
-            <th onclick="handleSort('level')">Max Depth <span id="sort-level"></span></th>
-            <th onclick="handleSort('weight')">Total Wt. <span id="sort-weight"></span></th>
-            <th onclick="handleSort('density')">Avg Density <span id="sort-density"></span></th>
-            <th onclick="handleSort('moisture')">Avg Moisture <span id="sort-moisture"></span></th>
-            <th onclick="handleSort('accCount')">Status <span id="sort-accCount"></span></th>
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-      </table>
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 4px;">
-      <div id="page-info" style="font-size: 12px; color: var(--muted);">Showing 1-10</div>
-      <div style="display: flex; gap: 6px;">
-        <button id="btn-prev" onclick="changePage(-1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Previous</button>
-        <button id="btn-next" onclick="changePage(1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Next</button>
-      </div>
-    </div>
-  </div>
+        <div class="charts-row">
+          <div class="chart-box">
+            <div class="chart-title">Trend: Accept Rate (Yield)</div>
+            <div class="chart-sub">% of accepted SAMPLES over time</div>
+            <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">Status Overview</div>
+            <div class="chart-sub">Accept vs Reject samples by date</div>
+            <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
+          </div>
+        </div>
 
-</main>
-<div class="footer">BLCP Sampling QC Dashboard V9 · Pro Analytics & Firebase</div>
+        <div class="charts-row">
+          <div class="chart-box">
+            <div class="chart-title" id="corr-title">Correlation: Depth vs Density</div>
+            <div class="chart-sub">Does depth affect density? (Based on filtered samples)</div>
+            <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title" id="corr-weight-title">Correlation: Depth vs Weight</div>
+            <div class="chart-sub">Does depth affect total weight? (Based on filtered samples)</div>
+            <div style="position:relative;height:240px"><canvas id="weight-corr-chart"></canvas></div>
+          </div>
+        </div>
+        
+        <div class="charts-row">
+          <div class="chart-box">
+            <div class="chart-title">Data Distribution: Density</div>
+            <div class="chart-sub">Histogram of sample densities</div>
+            <div style="position:relative;height:240px"><canvas id="hist-chart"></canvas></div>
+          </div>
+        </div>
 
-<script>
-// ==========================================
-// 🔴 นำ Config ของ Firebase มาใส่ตรงนี้ครับ 🔴
-// ==========================================
+        <div class="chart-box-wide" style="margin-bottom: 24px;">
+          <div class="chart-title">Weight Distribution (Total weight per hole)</div>
+          <div class="chart-sub">Check for missing weight outside the warning lines (±1 SD)</div>
+          <div style="position:relative;height:260px;width:100%"><canvas id="weight-chart"></canvas></div>
+          <div class="chart-legend">
+            <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average Weight</div>
+            <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
+          </div>
+        </div>
+
+        <div class="chart-box-wide">
+          <div class="chart-title">Moisture by Hole</div>
+          <div class="chart-sub">Average Total Moisture (%) per hole</div>
+          <div style="position:relative;height:260px;width:100%"><canvas id="moisture-chart"></canvas></div>
+        </div>
+
+        <div class="chart-box-wide">
+          <div class="chart-title">Density by Hole (Average of valid samples)</div>
+          <div class="chart-sub">Check for outliers outside the warning lines (±1 SD)</div>
+          <div id="density-wrap" style="position:relative;width:100%"><canvas id="density-chart"></canvas></div>
+          <div class="chart-legend">
+            <div class="leg-item"><div class="leg-dot" style="background:#2dd4a0"></div>Accept Proportion</div>
+            <div class="leg-item"><div class="leg-dot" style="background:#f87060"></div>Reject Proportion</div>
+            <div class="leg-item"><div class="leg-line" style="background:#4f8ef7"></div>Average Density</div>
+            <div class="leg-item"><div class="leg-line" style="background:#f5c842; border-top: 2px dashed"></div>±1 SD Limit</div>
+          </div>
+        </div>
+
+        <div class="detail-panel" id="detail-panel">
+          <div class="detail-header">
+            <div><div class="detail-hole" id="detail-hole">—</div><div id="detail-badge" style="margin-top:6px"></div></div>
+            <button class="close-btn" onclick="closeDetail()">✕</button>
+          </div>
+          <div class="detail-meta-grid" id="detail-meta"></div>
+          <div id="sample-section">
+            <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;margin-bottom:10px">Sample Measurements (Weight vs Depth)</div>
+            <div style="position:relative;height:180px"><canvas id="sample-chart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="table-section">
+          <div class="section-header">
+            <div class="section-title">Hole Aggregations</div>
+            <button onclick="exportCSV()" style="background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">📥 Export to CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th onclick="handleSort('date')">Date <span id="sort-date"></span></th>
+                  <th onclick="handleSort('machine')">Machine <span id="sort-machine"></span></th>
+                  <th onclick="handleSort('hole')">Hole No. <span id="sort-hole"></span></th>
+                  <th onclick="handleSort('level')">Max Depth <span id="sort-level"></span></th>
+                  <th onclick="handleSort('weight')">Total Wt. <span id="sort-weight"></span></th>
+                  <th onclick="handleSort('density')">Avg Density <span id="sort-density"></span></th>
+                  <th onclick="handleSort('moisture')">Avg Moisture <span id="sort-moisture"></span></th>
+                  <th onclick="handleSort('accCount')">Status <span id="sort-accCount"></span></th>
+                </tr>
+              </thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 4px;">
+            <div id="page-info" style="font-size: 12px; color: var(--muted);">Showing 1-10</div>
+            <div style="display: flex; gap: 6px;">
+              <button id="btn-prev" onclick="changePage(-1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Previous</button>
+              <button id="btn-next" onclick="changePage(1)" style="background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;">Next</button>
+            </div>
+          </div>
+        </div>
+
+      </main>
+      <div class="footer">BLCP Sampling QC Dashboard V14 · Stockpile Calculator Integrated</div>
+    </div> <div id="view-layout" class="view-section">
+      <main class="main">
+        <div class="upload-zone" id="layout-dropzone" style="margin-bottom: 24px;">
+          <div class="upload-icon">🖼️</div>
+          <div>
+            <div class="upload-title">Update Layout Map</div>
+            <div class="upload-sub">Drop your image file (PNG, JPG) here to update the stockpile map</div>
+          </div>
+          <button class="upload-btn" id="layout-upload-btn">Upload Image</button>
+          <input type="file" id="layout-file-input" accept="image/png, image/jpeg, image/jpg" style="display:none">
+        </div>
+
+        <div class="chart-box-wide">
+          <div class="chart-title" style="font-size: 18px;">Layout Stockpile</div>
+          <div class="chart-sub">แผนผังแสดงจุดกองถ่านหิน (รูปภาพล่าสุด)</div>
+          
+          <div style="text-align: center; padding: 20px; border: 2px dashed var(--border2); border-radius: var(--radius); margin-top: 20px; background: var(--bg3);" id="layout-display-zone">
+            <div id="layout-placeholder" style="padding: 40px 0;">
+              <div style="font-size: 32px; margin-bottom: 12px;">🗺️</div>
+              <div style="color: var(--muted);">ยังไม่มีรูปแผนผัง (อัปโหลดรูปที่ด้านบน)</div>
+            </div>
+            <img id="layout-img" src="" style="max-width: 100%; border-radius: 8px; display: none; margin: 0 auto;">
+            <button class="clear-btn" id="clear-layout-btn" style="color: var(--reject); margin-top: 16px; border: 1px solid var(--reject-bg); display: none; margin-left: auto; margin-right: auto;">🗑️ ลบรูปภาพ</button>
+          </div>
+        </div>
+
+        <div class="chart-title" style="font-size: 18px; margin-top: 32px; padding-left: 4px;">Stockpile Inventory Calculator</div>
+        <div class="chart-sub" style="padding-left: 4px;">กรอกตัวเลข Book Value และ Survey Volume เพื่อคำนวณ % Diff โดยระบบจะดึง Density ล่าสุดมาคูณให้อัตโนมัติ</div>
+        <div class="calc-grid" id="calc-grid"></div>
+
+      </main>
+      <div class="footer">BLCP Sampling QC Dashboard V14</div>
+    </div> </div> </div> <script>
+// --- UI Layout Functions ---
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+function switchTab(tabName, event) {
+  if(event) event.preventDefault();
+  document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + tabName).classList.add('active');
+  document.getElementById('nav-' + tabName).classList.add('active');
+}
+function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+
+// 🔴 --- FIREBASE CONFIG --- 🔴
+// ---------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyCyaMvvkOs05UVHIOd58YrXgt6fXQnubKs",
   authDomain: "qc-dashboard-data.firebaseapp.com",
@@ -326,26 +423,42 @@ const firebaseConfig = {
   messagingSenderId: "498303058081",
   appId: "1:498303058081:web:5ea4b35026eb0b6f6e30e0"
 };
-// ==========================================
+// ---------------------------------------------
 
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+let database = null;
 const DB_REF = "qc_data_v1";
 
+try {
+  firebase.initializeApp(firebaseConfig);
+  database = firebase.database();
+} catch (error) {
+  console.error("Firebase Initialization Error: ", error);
+}
+
+// --- Global Variables ---
 let allData = []; 
 let statusF = "All", dateF = "All", groupF = "All", machineF = "All";
-let holeF = []; // 🟢 เปลี่ยนให้รับค่าได้หลายหลุม
-let searchF = "", levelMinF = "", levelMaxF = "", densityMinF = "", densityMaxF = "";
+let holeF = []; 
+let searchF = "";
+let levelMinF = "", levelMaxF = "";
+let densityMinF = "", densityMaxF = "";
+let weightMinF = "", weightMaxF = ""; 
 let selectedHole = null;
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
-let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null, chartHist = null, chartStatus = null, chartWeight = null, chartMoisture = null, chartWeightCorr = null; // 🟢 เพิ่ม chartWeightCorr
 
-function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
-function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null;
+let chartHist = null, chartStatus = null, chartWeight = null, chartMoisture = null, chartWeightCorr = null; 
 
-function saveToDB(data) { database.ref(DB_REF).set(data); }
+// 🟢 รายชื่อ Piles ทั้งหมดสำหรับกล่องคำนวณ Layout
+const TARGET_PILES = ["A1", "A2", "B3", "CD1", "CD2", "CD4"];
+
+// --- Database Operations ---
+function saveToDB(data) { 
+  if (database) database.ref(DB_REF).set(data); 
+}
 
 function loadFromDB() {
+  if (!database) { render(); return; }
   showLoading();
   database.ref(DB_REF).once('value').then((snapshot) => {
     if (snapshot.exists()) {
@@ -356,25 +469,25 @@ function loadFromDB() {
     }
     hideLoading();
   }).catch((error) => {
-    console.error("Firebase Error:", error);
+    console.error("Firebase Read Error:", error);
     hideLoading();
   });
 }
 
 function clearDB() {
   if (!confirm("Are you sure you want to clear all data on ALL devices?")) return;
-  database.ref(DB_REF).remove();
+  if (database) database.ref(DB_REF).remove();
   allData = [];
   document.getElementById("clear-db-btn").style.display = "none";
   populateFilters();
   render();
 }
 
+// --- Excel Parsing ---
 function excelSerialToDateStr(serial) {
   const ms = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
   return new Date(ms).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
-
 function getCellVal(ws, addr) {
   const cell = ws[addr];
   if (!cell) return null;
@@ -393,7 +506,6 @@ function parseXLSX(buf) {
     if (typeof dateRaw !== "number") return;
     const dateStr = excelSerialToDateStr(dateRaw);
     
-    // 🟢 ดึงข้อมูล Machine No จาก C3
     const machineRaw = getCellVal(ws, "C3");
     const machine = (machineRaw !== null && machineRaw !== undefined) ? String(machineRaw).trim() : "Unknown";
 
@@ -430,11 +542,9 @@ function parseXLSX(buf) {
     }
 
     if (rawSamples.length > 0) {
-      // 🟢 บันทึกข้อมูล machine ลงไปใน object ด้วย
       out.push({ date: dateStr, machine: machine, hole: holeName, pile: pile, rawSamples: rawSamples });
     }
   });
-
   return out;
 }
 
@@ -443,8 +553,8 @@ function getFiltered() {
   allData.forEach(h => {
     if (dateF !== "All" && h.date !== dateF) return;
     if (groupF !== "All" && h.pile !== groupF) return;
-    if (machineF !== "All" && h.machine !== machineF) return; // 🟢 ฟิลเตอร์ Machine
-    if (holeF.length > 0 && !holeF.includes(h.hole)) return; // 🟢 ฟิลเตอร์หลายหลุม
+    if (machineF !== "All" && h.machine !== machineF) return; 
+    if (holeF.length > 0 && !holeF.includes(h.hole)) return; 
     if (searchF && !h.hole.toLowerCase().includes(searchF.toLowerCase())) return;
 
     let filteredSamples = (h.rawSamples || []).filter(s => {
@@ -454,6 +564,8 @@ function getFiltered() {
       if (levelMaxF !== "") pass = pass && s.to <= Number(levelMaxF);
       if (densityMinF !== "") pass = pass && s.den >= Number(densityMinF);
       if (densityMaxF !== "") pass = pass && s.den <= Number(densityMaxF);
+      if (weightMinF !== "") pass = pass && s.w >= Number(weightMinF);
+      if (weightMaxF !== "") pass = pass && s.w <= Number(weightMaxF);
       return pass;
     });
 
@@ -480,11 +592,24 @@ function getFiltered() {
 }
 
 function calcStats(arr, key) {
-  if (!arr.length) return { avg: 0, sd: 0, min: 0, max: 0 };
+  if (!arr.length) return { avg: 0, sd: 0, sem: 0, min: 0, max: 0 };
   const v = arr.map(r => r[key]);
-  const avg = v.reduce((a, b) => a + b, 0) / v.length;
-  const sd = Math.sqrt(v.reduce((a, b) => a + (b - avg) ** 2, 0) / v.length);
-  return { avg: +avg.toFixed(4), sd: +sd.toFixed(4), min: +Math.min(...v).toFixed(4), max: +Math.max(...v).toFixed(4) };
+  const n = v.length;
+  
+  if (n === 1) return { avg: +v[0].toFixed(4), sd: 0, sem: 0, min: +v[0].toFixed(4), max: +v[0].toFixed(4) };
+
+  const avg = v.reduce((a, b) => a + b, 0) / n;
+  const sumSq = v.reduce((a, b) => a + Math.pow(b - avg, 2), 0);
+  const sd = Math.sqrt(sumSq / (n - 1));
+  const sem = sd / Math.sqrt(n);
+  
+  return { 
+    avg: +avg.toFixed(4), 
+    sd: +sd.toFixed(4), 
+    sem: +sem.toFixed(4), 
+    min: +Math.min(...v).toFixed(4), 
+    max: +Math.max(...v).toFixed(4) 
+  };
 }
 
 function calcCorrelation(arr, keyX, keyY) {
@@ -497,49 +622,137 @@ function calcCorrelation(arr, keyX, keyY) {
   return den === 0 ? 0 : ((n * sumXY) - (sumX * sumY)) / den;
 }
 
-function gc(id) { return document.getElementById(id).getContext("2d"); }
+const gc = id => document.getElementById(id).getContext("2d");
 const GRID = "rgba(255,255,255,0.05)", TICK = "#7a8099";
 
-// 🟢 อัปเดต Progress Bar 10 ค่า
+// 🟢 1. อัปเดต Progress Boxes
 function renderProgress() {
-  let s = { Overall: {t:0, a:0}, A1: {t:0, a:0}, CD1: {t:0, a:0}, CD2: {t:0, a:0}, CD4: {t:0, a:0} };
+  let s = { 'Overall (without Bedding)': {t:0, a:0}, A1: {t:0, a:0}, A2: {t:0, a:0}, B3: {t:0, a:0}, CD1: {t:0, a:0}, CD2: {t:0, a:0}, CD4: {t:0, a:0} };
   
-  // นำข้อมูลทั้งหมด (ไม่สนใจ filter) มาคำนวณภาพรวมของโปรเจกต์
   allData.forEach(h => {
       let p = h.pile;
       let t = h.rawSamples.length;
       let a = h.rawSamples.filter(x => !x.status.toLowerCase().includes("reject")).length;
-      s.Overall.t += t; s.Overall.a += a;
+      s['Overall (without Bedding)'].t += t; s['Overall (without Bedding)'].a += a;
       if(s[p]) { s[p].t += t; s[p].a += a; }
   });
   
-  const tg = { Overall: 1826, A1: 416, CD1: 330, CD2: 420, CD4: 468 };
+  const tg = { 'Overall (without Bedding)': 1826, A1: 416, A2: 48, B3: 48, CD1: 330, CD2: 420, CD4: 468 };
   let html = '';
   for(let k in tg) {
       let pt = Math.min((s[k].t / tg[k])*100, 100).toFixed(1);
       let pa = Math.min((s[k].a / tg[k])*100, 100).toFixed(1);
-      html += `<div class="prog-card-sm">
+      let remain = Math.max(0, tg[k] - s[k].a); // 🟢 คำนวณ Remaining = Target - Accept
+      
+      html += `
+      <div class="prog-card-sm">
         <div class="prog-title-sm"><span>${k} Progress</span> <span style="color:var(--muted); font-size:11px;">Target: ${tg[k]}</span></div>
-        <div class="prog-row"><span>Total Samples (Acc+Rej): <b style="color:var(--text)">${s[k].t}</b></span> <span>${pt}%</span></div>
+        <div class="prog-row"><span>Total (Acc+Rej): <b style="color:var(--text)">${s[k].t}</b></span> <span>${pt}%</span></div>
         <div class="prog-track-sm"><div class="prog-fill-tot" style="width:${pt}%"></div></div>
+        
         <div class="prog-row" style="margin-top:14px;"><span>Accept Only: <b style="color:var(--accept)">${s[k].a}</b></span> <span>${pa}%</span></div>
         <div class="prog-track-sm"><div class="prog-fill-acc" style="width:${pa}%"></div></div>
+        
+        <div class="prog-row" style="margin-top:auto; padding-top:12px; border-top:1px dashed var(--border);">
+            <span style="font-weight:600; color:var(--warning);">Remaining Samples (Accept)</span>
+            <span style="font-weight:700; color:var(--warning); font-size:14px;">${remain}</span>
+        </div>
       </div>`;
   }
   document.getElementById("progress-container").innerHTML = html;
 }
 
-function renderHistogram(f) {
-  if (chartHist) chartHist.destroy();
-  let densities = [];
-  f.forEach(r => r.samples.forEach(s => densities.push(s.den)));
-  if (densities.length === 0) return;
-  const min = Math.min(...densities), max = Math.max(...densities);
-  const binCount = 15, binWidth = (max - min) / binCount || 1; 
-  let bins = Array(binCount).fill(0), binLabels = [];
-  for (let i = 0; i < binCount; i++) binLabels.push(`${(min + i * binWidth).toFixed(2)} - ${(min + (i + 1) * binWidth).toFixed(2)}`);
-  densities.forEach(d => { let binIdx = Math.floor((d - min) / binWidth); if (binIdx >= binCount) binIdx = binCount - 1; bins[binIdx]++; });
-  chartHist = new Chart(gc("hist-chart"), { type: "bar", data: { labels: binLabels, datasets: [{ label: "Samples", data: bins, backgroundColor: "#4f8ef7", borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45, font: { size: 10 } } }, y: { title: { display: true, text: "Frequency", color: TICK, font: { size: 11 } }, grid: { color: GRID }, ticks: { color: TICK } } } } });
+function renderSummary(f) {
+  let totalAcc = 0, totalRej = 0;
+  let accDenSum = 0, accDenCount = 0, rejDenSum = 0, rejDenCount = 0;
+  let accWtSum = 0, accWtCount = 0, rejWtSum = 0, rejWtCount = 0;
+  let accMoisSum = 0, accMoisCount = 0, rejMoisSum = 0, rejMoisCount = 0;
+  let allSamples = [];
+
+  f.forEach(r => {
+    totalAcc += r.accCount; totalRej += r.rejCount;
+    allSamples = allSamples.concat(r.samples); 
+    r.samples.forEach(s => {
+      let isRej = s.status.toLowerCase().includes("reject");
+      if (!isRej) { 
+        accDenSum += s.den; accDenCount++; accWtSum += s.w; accWtCount++;
+        if (s.mois > 0) { accMoisSum += s.mois; accMoisCount++; }
+      } else {      
+        rejDenSum += s.den; rejDenCount++; rejWtSum += s.w; rejWtCount++;
+        if (s.mois > 0) { rejMoisSum += s.mois; rejMoisCount++; }
+      }
+    });
+  });
+
+  let totalS = totalAcc + totalRej;
+  const calcAvg = (sum, count, decimals) => count > 0 ? (sum / count).toFixed(decimals) : "-";
+  
+  let avgDenAcc = calcAvg(accDenSum, accDenCount, 4);
+  let avgDenRej = calcAvg(rejDenSum, rejDenCount, 4);
+  let avgDenTot = calcAvg(accDenSum + rejDenSum, accDenCount + rejDenCount, 4);
+
+  let avgWtAcc = calcAvg(accWtSum, accWtCount, 2);
+  let avgWtRej = calcAvg(rejWtSum, rejWtCount, 2);
+  let avgWtTot = calcAvg(accWtSum + rejWtSum, accWtCount + rejWtCount, 2);
+
+  let avgMoisAcc = calcAvg(accMoisSum, accMoisCount, 2);
+  let avgMoisRej = calcAvg(rejMoisSum, rejMoisCount, 2);
+  let avgMoisTot = calcAvg(accMoisSum + rejMoisSum, accMoisCount + rejMoisCount, 2);
+
+  document.getElementById("summary-cards").innerHTML = `
+    <div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div>
+    <div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div>
+    <div class="card c-accept"><div class="card-label" style="color:var(--accept)">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div>
+    <div class="card c-reject"><div class="card-label" style="color:var(--reject)">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div>
+    
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Density (Accept)</div><div class="card-val">${avgDenAcc}<span class="card-unit">MT/m³</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Density (Reject)</div><div class="card-val">${avgDenRej}<span class="card-unit">MT/m³</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Density (All)</div><div class="card-val">${avgDenTot}<span class="card-unit">MT/m³</span></div></div>
+
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Wt/Sample (Accept)</div><div class="card-val">${avgWtAcc}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Wt/Sample (Reject)</div><div class="card-val">${avgWtRej}<span class="card-unit">kg</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Wt/Sample (All)</div><div class="card-val">${avgWtTot}<span class="card-unit">kg</span></div></div>
+
+    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Moisture (Accept)</div><div class="card-val">${avgMoisAcc}<span class="card-unit">%</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Moisture (Reject)</div><div class="card-val">${avgMoisRej}<span class="card-unit">%</span></div></div>
+    <div class="card"><div class="card-label" style="color:var(--moisture)">Avg Moisture (All)</div><div class="card-val">${avgMoisTot}<span class="card-unit">%</span></div></div>
+  `;
+
+  const dsHole = calcStats(f, "density");
+  const wsHole = calcStats(f, "weight");
+  const lsHole = calcStats(f, "level");
+  const dsSample = calcStats(allSamples, "den"); 
+
+  document.getElementById("stat-grid").innerHTML = `
+    <div class="stat-box">
+      <div class="stat-box-title">Density (MT/m³)</div>
+      <div class="stat-row"><span class="stat-key">Average (Overall)</span><span class="stat-val">${dsSample.avg}</span></div>
+      <div class="stat-row" style="margin-top: 6px;"><span class="stat-key" style="color:var(--muted)">SD (by Sample)</span><span class="stat-val">${dsSample.sd}</span></div>
+      <div class="stat-row"><span class="stat-key" style="color:var(--accept)">SEM (by Sample)</span><span class="stat-val">${dsSample.sem}</span></div>
+      <div class="stat-row" style="border-top: 1px dashed var(--border); margin-top: 6px; padding-top: 6px;"><span class="stat-key" style="color:var(--muted)">SD (by Hole)</span><span class="stat-val">${dsHole.sd}</span></div>
+      <div class="stat-row"><span class="stat-key" style="color:var(--warning)">SEM (by Hole)</span><span class="stat-val">${dsHole.sem}</span></div>
+      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${dsSample.min}</span></div>
+      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${dsSample.max}</span></div>
+    </div>
+    
+    <div class="stat-box">
+      <div class="stat-box-title">Filtered Weight/Hole (kg)</div>
+      <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${wsHole.avg}</span></div>
+      <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${wsHole.sd}</span></div>
+      <div class="stat-row"><span class="stat-key" style="color:var(--warning)">SEM (by Hole)</span><span class="stat-val">${wsHole.sem}</span></div>
+      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${wsHole.min}</span></div>
+      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${wsHole.max}</span></div>
+    </div>
+    
+    <div class="stat-box">
+      <div class="stat-box-title">Filtered Max Depth (m)</div>
+      <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${lsHole.avg}</span></div>
+      <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${lsHole.sd}</span></div>
+      <div class="stat-row"><span class="stat-key" style="color:var(--warning)">SEM (by Hole)</span><span class="stat-val">${lsHole.sem}</span></div>
+      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${lsHole.min}</span></div>
+      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${lsHole.max}</span></div>
+    </div>
+  `;
 }
 
 function renderCharts(f) {
@@ -561,7 +774,7 @@ function renderCharts(f) {
         { label: "-1 SD", data: f.map(() => ds.avg - ds.sd), type: "line", borderColor: "#f5c842", borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, stack: "lineSD2" }
       ]
     },
-    options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { if(c.dataset.label.includes("SD")) return `${c.dataset.label}: ${c.parsed.x.toFixed(4)}`; if(c.dataset.label === "Avg") return `Avg: ${c.parsed.x.toFixed(4)}`; let totalDen = f[c.dataIndex].density; return `Total Density: ${totalDen.toFixed(4)} kg/m³`; } } } }, scales: { x: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } }, y: { stacked: true, grid: { display: false }, ticks: { color: TICK } } }, onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } }
+    options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { if(c.dataset.label.includes("SD")) return `${c.dataset.label}: ${c.parsed.x.toFixed(4)}`; if(c.dataset.label === "Avg") return `Avg: ${c.parsed.x.toFixed(4)}`; let totalDen = f[c.dataIndex].density; return `Total Density: ${totalDen.toFixed(4)} MT/m³`; } } } }, scales: { x: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } }, y: { stacked: true, grid: { display: false }, ticks: { color: TICK } } }, onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } }
   });
 
   const dates = [...new Set(f.map(r => r.date))].sort((a,b) => new Date(a) - new Date(b));
@@ -583,19 +796,16 @@ function renderCharts(f) {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: {color: TICK, boxWidth: 12} } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { color: TICK } }, y: { stacked: true, grid: { color: GRID }, ticks: { color: TICK } } } }
   });
 
-  /* SCATTER CHART (Density) */
   const rValue = calcCorrelation(f, "level", "density");
   document.getElementById("corr-title").innerHTML = `Correlation: Depth vs Density <span style="font-size:11px; color:#7a8099">(r = ${rValue.toFixed(2)})</span>`;
   if (chartScatter) chartScatter.destroy();
   chartScatter = new Chart(gc("scatter-chart"), { type: "scatter", data: { datasets: [{ data: f.map(r => ({ x: r.level, y: r.density, raw: r })), backgroundColor: f.map(r => r.rejCount === 0 ? "#2dd4a0" : (r.accCount === 0 ? "#f87060" : "#f5c842")) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: {callbacks: { label: c => `${c.raw.raw.hole}` }} }, scales: { x: { title: { display: true, text: "Max Depth (m)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } }, y: { title: { display: true, text: "Density", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } } } });
 
-  /* 🟢 SCATTER CHART (Weight) */
   const rWeight = calcCorrelation(f, "level", "weight");
   document.getElementById("corr-weight-title").innerHTML = `Correlation: Depth vs Weight <span style="font-size:11px; color:#7a8099">(r = ${rWeight.toFixed(2)})</span>`;
   if (chartWeightCorr) chartWeightCorr.destroy();
   chartWeightCorr = new Chart(gc("weight-corr-chart"), { type: "scatter", data: { datasets: [{ data: f.map(r => ({ x: r.level, y: r.weight, raw: r })), backgroundColor: f.map(r => r.rejCount === 0 ? "#2dd4a0" : (r.accCount === 0 ? "#f87060" : "#f5c842")) }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: {callbacks: { label: c => `${c.raw.raw.hole}` }} }, scales: { x: { title: { display: true, text: "Max Depth (m)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } }, y: { title: { display: true, text: "Total Weight (kg)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } } } });
 
-  /* 🟢 WEIGHT DISTRIBUTION CHART (+SD Lines) */
   const ws = calcStats(f, "weight");
   if (chartWeight) chartWeight.destroy();
   chartWeight = new Chart(gc("weight-chart"), {
@@ -626,89 +836,17 @@ function renderCharts(f) {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45 } }, y: { title: { display: true, text: "Moisture (%)", color: TICK }, grid: { color: GRID }, ticks: { color: TICK } } }, onClick: (_, els) => { if (els.length) selectHole(f[els[0].index].hole === selectedHole ? null : f[els[0].index].hole); } }
   });
 
-  renderHistogram(f);
-}
-
-function renderSummary(f) {
-  let totalAcc = 0, totalRej = 0;
-  
-  // 🟢 สร้างตัวแปรมารองรับการคำนวณแยก Accept / Reject
-  let accDenSum = 0, accDenCount = 0, rejDenSum = 0, rejDenCount = 0;
-  let accWtSum = 0, accWtCount = 0, rejWtSum = 0, rejWtCount = 0;
-  let accMoisSum = 0, accMoisCount = 0, rejMoisSum = 0, rejMoisCount = 0;
-
-  f.forEach(r => {
-    totalAcc += r.accCount;
-    totalRej += r.rejCount;
-    
-    // วนลูปดูทุกๆ Sample ย่อยในแต่ละหลุม
-    r.samples.forEach(s => {
-      let isRej = s.status.toLowerCase().includes("reject");
-      if (!isRej) { // กลุ่ม Accept
-        accDenSum += s.den; accDenCount++;
-        accWtSum += s.w; accWtCount++;
-        if (s.mois > 0) { accMoisSum += s.mois; accMoisCount++; }
-      } else {      // กลุ่ม Reject
-        rejDenSum += s.den; rejDenCount++;
-        rejWtSum += s.w; rejWtCount++;
-        if (s.mois > 0) { rejMoisSum += s.mois; rejMoisCount++; }
-      }
-    });
-  });
-
-  let totalS = totalAcc + totalRej;
-  
-  // 🟢 ฟังก์ชันช่วยคำนวณค่าเฉลี่ย (ถ้าไม่มีข้อมูลให้แสดงขีด -)
-  const calcAvg = (sum, count, decimals) => count > 0 ? (sum / count).toFixed(decimals) : "-";
-  
-  // คำนวณ Density
-  let avgDenAcc = calcAvg(accDenSum, accDenCount, 4);
-  let avgDenRej = calcAvg(rejDenSum, rejDenCount, 4);
-  let avgDenTot = calcAvg(accDenSum + rejDenSum, accDenCount + rejDenCount, 4);
-
-  // คำนวณ Weight (เฉลี่ยต่อ 1 Sample)
-  let avgWtAcc = calcAvg(accWtSum, accWtCount, 2);
-  let avgWtRej = calcAvg(rejWtSum, rejWtCount, 2);
-  let avgWtTot = calcAvg(accWtSum + rejWtSum, accWtCount + rejWtCount, 2);
-
-  // คำนวณ Moisture
-  let avgMoisAcc = calcAvg(accMoisSum, accMoisCount, 2);
-  let avgMoisRej = calcAvg(rejMoisSum, rejMoisCount, 2);
-  let avgMoisTot = calcAvg(accMoisSum + rejMoisSum, accMoisCount + rejMoisCount, 2);
-
-  // 🟢 อัปเดตกล่องการ์ดทั้งหมด 13 กล่อง!
-  document.getElementById("summary-cards").innerHTML = `
-    <div class="card"><div class="card-label">Visible Holes</div><div class="card-val">${f.length}</div></div>
-    <div class="card"><div class="card-label">Visible Samples</div><div class="card-val">${totalS}</div></div>
-    <div class="card c-accept"><div class="card-label" style="color:var(--accept)">Accept Samples</div><div class="card-val">${totalAcc}<span class="card-unit">${totalS?(totalAcc/totalS*100).toFixed(1):0}%</span></div></div>
-    <div class="card c-reject"><div class="card-label" style="color:var(--reject)">Reject Samples</div><div class="card-val">${totalRej}<span class="card-unit">${totalS?(totalRej/totalS*100).toFixed(1):0}%</span></div></div>
-    
-    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Density (Accept)</div><div class="card-val">${avgDenAcc}<span class="card-unit">MT/m³</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Density (Reject)</div><div class="card-val">${avgDenRej}<span class="card-unit">MT/m³</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Density (All)</div><div class="card-val">${avgDenTot}<span class="card-unit">MT/m³</span></div></div>
-
-    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Wt/Sample (Accept)</div><div class="card-val">${avgWtAcc}<span class="card-unit">kg</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Wt/Sample (Reject)</div><div class="card-val">${avgWtRej}<span class="card-unit">kg</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--accent)">Avg Wt/Sample (All)</div><div class="card-val">${avgWtTot}<span class="card-unit">kg</span></div></div>
-
-    <div class="card"><div class="card-label" style="color:var(--accept)">Avg Moisture (Accept)</div><div class="card-val">${avgMoisAcc}<span class="card-unit">%</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--reject)">Avg Moisture (Reject)</div><div class="card-val">${avgMoisRej}<span class="card-unit">%</span></div></div>
-    <div class="card"><div class="card-label" style="color:var(--moisture)">Avg Moisture (All)</div><div class="card-val">${avgMoisTot}<span class="card-unit">%</span></div></div>
-  `;
-
-  // ส่วนของตาราง Stat ด้านล่างคงเดิม
-  const ds = calcStats(f, "density"), ws = calcStats(f, "weight"), ls = calcStats(f, "level");
-  document.getElementById("stat-grid").innerHTML = [
-    { title: "Density (MT/m³)", s: ds }, { title: "Filtered Weight/Hole (kg)", s: ws }, { title: "Filtered Max Depth (m)", s: ls }
-  ].map(({ title, s }) => `
-    <div class="stat-box">
-      <div class="stat-box-title">${title}</div>
-      <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${s.avg}</span></div>
-      <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${s.sd}</span></div>
-      <div class="stat-row"><span class="stat-key">Min</span><span class="stat-val">${s.min}</span></div>
-      <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${s.max}</span></div>
-    </div>
-  `).join("");
+  if (chartHist) chartHist.destroy();
+  let densities = [];
+  f.forEach(r => r.samples.forEach(s => densities.push(s.den)));
+  if (densities.length > 0) {
+    const min = Math.min(...densities), max = Math.max(...densities);
+    const binCount = 15, binWidth = (max - min) / binCount || 1; 
+    let bins = Array(binCount).fill(0), binLabels = [];
+    for (let i = 0; i < binCount; i++) binLabels.push(`${(min + i * binWidth).toFixed(2)} - ${(min + (i + 1) * binWidth).toFixed(2)}`);
+    densities.forEach(d => { let binIdx = Math.floor((d - min) / binWidth); if (binIdx >= binCount) binIdx = binCount - 1; bins[binIdx]++; });
+    chartHist = new Chart(gc("hist-chart"), { type: "bar", data: { labels: binLabels, datasets: [{ label: "Samples", data: bins, backgroundColor: "#4f8ef7", borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: TICK, maxRotation: 45, minRotation: 45, font: { size: 10 } } }, y: { title: { display: true, text: "Frequency", color: TICK, font: { size: 11 } }, grid: { color: GRID }, ticks: { color: TICK } } } } });
+  }
 }
 
 function handleSort(col) {
@@ -756,7 +894,7 @@ function renderTable(f) {
 
 function exportCSV() {
   const f = getFiltered(); if (!f.length) return alert("No data to export.");
-  let csv = "Date,Machine,Hole No.,Max Filtered Depth (m),Total Filtered Weight (kg),Avg Density,Avg Moisture (%),Accept Samples,Reject Samples\n";
+  let csv = "Date,Machine,Hole No.,Max Filtered Depth (m),Total Filtered Weight (kg),Avg Density (MT/m³),Avg Moisture (%),Accept Samples,Reject Samples\n";
   f.forEach(r => csv += `"${r.date}","${r.machine}","${r.hole}",${r.level},${r.weight},${r.density},${r.moisture},${r.accCount},${r.rejCount}\n`);
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = "QC_Data.csv"; a.click();
 }
@@ -792,34 +930,31 @@ function selectHole(h) {
 }
 function closeDetail() { selectHole(null); }
 
-// 🟢 อัปเดต Dropdown และสร้างปุ่มฟิลเตอร์
 function populateFilters() { 
   document.getElementById("group-select").innerHTML = ["All", ...new Set(allData.map(r => r.pile))].sort().map(p => `<option value="${p}"${p === groupF ? " selected" : ""}>${p === "All" ? "All Piles" : "Pile " + p}</option>`).join(""); 
   document.getElementById("machine-select").innerHTML = ["All", ...new Set(allData.map(r => r.machine))].sort().map(m => `<option value="${m}"${m === machineF ? " selected" : ""}>${m === "All" ? "All Machines" : "MC: " + m}</option>`).join(""); 
-  
-  // สร้าง Dropdown ของ Hole สำหรับเลือกหลายหลุม
   document.getElementById("hole-select").innerHTML = `<option value="All">➕ Add Hole to Filter</option>` + [...new Set(allData.map(r => r.hole))].sort().map(h => `<option value="${h}">${h}</option>`).join(""); 
   document.getElementById("date-select").innerHTML = ["All", ...new Set(allData.map(r => r.date))].map(d => `<option value="${d}"${d === dateF ? " selected" : ""}>${d === "All" ? "All Dates" : d}</option>`).join(""); 
 }
 
-// 🟢 ฟังก์ชันวาดป้าย Hole Tag
 function updateHoleTags() {
   const c = document.getElementById("hole-tags");
   if(!holeF.length) { c.innerHTML = ""; return; }
   c.innerHTML = holeF.map(h => `<div class="hole-tag">${h} <span class="hole-tag-close" onclick="removeHole('${h}')">✕</span></div>`).join("");
 }
 
-// 🟢 ฟังก์ชันลบ Hole Tag
-window.removeHole = function(h) {
-  holeF = holeF.filter(x => x !== h);
-  updateHoleTags();
-  curPage = 1; render();
-}
+window.removeHole = function(h) { holeF = holeF.filter(x => x !== h); updateHoleTags(); curPage = 1; render(); }
 
 function render() {
-  const f = getFiltered(); renderProgress(); renderSummary(f); renderCharts(f); renderTable(f);
+  const f = getFiltered(); 
+  renderProgress(); 
+  renderSummary(f); 
+  renderCharts(f); 
+  renderTable(f);
+  updateLayoutDensity(); // 🟢 อัปเดตข้อมูล Density ไปที่กล่องคำนวณ Stockpile ด้วย
+
   document.getElementById("record-count").textContent = allData.length;
-  document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || machineF !== "All" || holeF.length > 0 || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF) ? "" : "none";
+  document.getElementById("clear-btn").style.display = (statusF !== "All" || dateF !== "All" || groupF !== "All" || machineF !== "All" || holeF.length > 0 || searchF || levelMinF || levelMaxF || densityMinF || densityMaxF || weightMinF || weightMaxF) ? "" : "none";
   document.querySelectorAll(".pill-group .pill").forEach(b => b.className = "pill" + (b.dataset.s === statusF ? " active-" + statusF.toLowerCase() : ""));
 }
 
@@ -833,24 +968,18 @@ function loadFile(file) {
         if (parsed && parsed.length > 0) {
           const newHoleNames = new Set(parsed.map(p => p.hole));
           allData = allData.filter(d => !newHoleNames.has(d.hole)).concat(parsed);
-          
-          saveToDB(allData); 
-          document.getElementById("clear-db-btn").style.display = "block"; 
-          
-          selectedHole = null; closeDetail();
-          curPage = 1; sortCol = ""; document.querySelectorAll("[id^='sort-']").forEach(el => el.innerHTML = "");
+          saveToDB(allData); document.getElementById("clear-db-btn").style.display = "block"; 
+          selectedHole = null; closeDetail(); curPage = 1; sortCol = ""; document.querySelectorAll("[id^='sort-']").forEach(el => el.innerHTML = "");
           populateFilters(); render();
         } else { alert("ไม่พบข้อมูลที่อ่านได้ (กรุณาตรวจสอบว่าเลือกไฟล์ Drilling Data)"); }
-      } catch (err) {
-        console.error(err);
-        alert("เกิดข้อผิดพลาดในการอ่านไฟล์");
-      }
+      } catch (err) { console.error(err); alert("เกิดข้อผิดพลาดในการอ่านไฟล์"); }
       hideLoading();
     };
     reader.readAsArrayBuffer(file);
   }, 100);
 }
 
+// --- Event Listeners ---
 const dz = document.getElementById("dropzone"), fi = document.getElementById("file-input");
 document.getElementById("upload-btn").addEventListener("click", e => { e.stopPropagation(); fi.click(); });
 dz.addEventListener("click", () => fi.click());
@@ -862,31 +991,147 @@ fi.addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.fi
 document.querySelectorAll(".pill-group .pill").forEach(b => b.addEventListener("click", () => { statusF = b.dataset.s; curPage = 1; render(); }));
 document.getElementById("group-select").addEventListener("change", e => { groupF = e.target.value; curPage = 1; render(); });
 document.getElementById("machine-select").addEventListener("change", e => { machineF = e.target.value; curPage = 1; render(); }); 
-
-// 🟢 อีเวนต์สำหรับตอนเลือกหลุม (เพิ่มเข้า Tag List)
-document.getElementById("hole-select").addEventListener("change", e => { 
-  let val = e.target.value;
-  if(val !== "All" && !holeF.includes(val)) { holeF.push(val); }
-  e.target.value = "All"; // คืนค่ากลับเป็นสถานะ Add Hole
-  updateHoleTags();
-  curPage = 1; render(); 
-}); 
-
+document.getElementById("hole-select").addEventListener("change", e => { let val = e.target.value; if(val !== "All" && !holeF.includes(val)) { holeF.push(val); } e.target.value = "All"; updateHoleTags(); curPage = 1; render(); }); 
 document.getElementById("date-select").addEventListener("change", e => { dateF = e.target.value; curPage = 1; render(); });
 document.getElementById("search-hole").addEventListener("input", e => { searchF = e.target.value; curPage = 1; render(); });
+
 document.getElementById("level-min").addEventListener("input", e => { levelMinF = e.target.value; curPage = 1; render(); });
 document.getElementById("level-max").addEventListener("input", e => { levelMaxF = e.target.value; curPage = 1; render(); });
 document.getElementById("density-min").addEventListener("input", e => { densityMinF = e.target.value; curPage = 1; render(); });
 document.getElementById("density-max").addEventListener("input", e => { densityMaxF = e.target.value; curPage = 1; render(); });
+document.getElementById("weight-min").addEventListener("input", e => { weightMinF = e.target.value; curPage = 1; render(); });
+document.getElementById("weight-max").addEventListener("input", e => { weightMaxF = e.target.value; curPage = 1; render(); });
+
 document.getElementById("clear-btn").addEventListener("click", () => {
-  statusF = "All"; dateF = "All"; groupF = "All"; machineF = "All"; holeF = []; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = "";
+  statusF = "All"; dateF = "All"; groupF = "All"; machineF = "All"; holeF = []; searchF = ""; levelMinF = ""; levelMaxF = ""; densityMinF = ""; densityMaxF = ""; weightMinF = ""; weightMaxF = "";
   document.getElementById("search-hole").value = ""; document.querySelectorAll(".range-input").forEach(i => i.value = "");
   updateHoleTags(); curPage = 1; populateFilters(); render();
 });
 
 document.getElementById("clear-db-btn").addEventListener("click", clearDB);
-window.onload = loadFromDB;
 
+// ==========================================
+// 6. LAYOUT IMAGE LOGIC
+// ==========================================
+const lDz = document.getElementById("layout-dropzone"), lFi = document.getElementById("layout-file-input");
+const lImg = document.getElementById("layout-img"), lPh = document.getElementById("layout-placeholder"), lBtn = document.getElementById("clear-layout-btn");
+
+document.getElementById("layout-upload-btn").addEventListener("click", e => { e.stopPropagation(); lFi.click(); });
+lDz.addEventListener("click", () => lFi.click());
+lDz.addEventListener("dragover", e => { e.preventDefault(); lDz.classList.add("drag"); });
+lDz.addEventListener("dragleave", () => lDz.classList.remove("drag"));
+lDz.addEventListener("drop", e => { e.preventDefault(); lDz.classList.remove("drag"); if (e.dataTransfer.files[0]) processImage(e.dataTransfer.files[0]); });
+lFi.addEventListener("change", e => { if (e.target.files[0]) processImage(e.target.files[0]); });
+
+function processImage(file) {
+  if (!file.type.startsWith('image/')) { alert('กรุณาอัปโหลดไฟล์รูปภาพ (PNG, JPG) เท่านั้นครับ'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const base64Data = e.target.result; displayLayout(base64Data);
+    try { localStorage.setItem("savedLayoutImage", base64Data); } catch (err) { console.warn("รูปภาพมีขนาดใหญ่เกินกว่าที่เบราว์เซอร์จะจำไว้ได้"); }
+  };
+  reader.readAsDataURL(file);
+}
+
+function displayLayout(srcData) {
+  if(srcData) { lImg.src = srcData; lImg.style.display = "block"; lBtn.style.display = "block"; lPh.style.display = "none"; } 
+  else { lImg.src = ""; lImg.style.display = "none"; lBtn.style.display = "none"; lPh.style.display = "block"; }
+}
+
+lBtn.addEventListener("click", () => { if(confirm("ต้องการลบรูปแผนผังนี้ใช่หรือไม่?")) { localStorage.removeItem("savedLayoutImage"); displayLayout(null); } });
+const savedImg = localStorage.getItem("savedLayoutImage"); if (savedImg) displayLayout(savedImg);
+
+// ==========================================
+// 🟢 7. STOCKPILE INVENTORY CALCULATOR
+// ==========================================
+function initLayoutCalcs() {
+  let html = '';
+  TARGET_PILES.forEach(p => {
+      html += `
+      <div class="calc-box">
+          <div class="calc-title">Pile ${p}</div>
+          <div class="calc-row"><span>Book Value (tons)</span> <input type="number" id="bk-${p}" class="calc-input" placeholder="User input" oninput="calcVol('${p}')"></div>
+          <div class="calc-row"><span>Survey Volume (m³)</span> <input type="number" id="sv-${p}" class="calc-input" placeholder="User input" oninput="calcVol('${p}')"></div>
+          <div class="calc-row">
+              <span style="color:var(--muted)">Density from DB</span>
+              <select id="dt-${p}" class="calc-select" onchange="calcVol('${p}')">
+                  <option value="acc" id="opt-acc-${p}">Accept: 0.0000</option>
+                  <option value="all" id="opt-all-${p}">All: 0.0000</option>
+              </select>
+          </div>
+          <div class="calc-row" style="margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 12px;">
+              <span>Survey Tons =</span> <span class="calc-res" id="st-${p}">0.00</span>
+          </div>
+          <div class="calc-row" style="font-size: 15px;">
+              <span>Diff. =</span> <span class="calc-diff" id="df-${p}">0.00 %</span>
+          </div>
+      </div>`;
+  });
+  document.getElementById("calc-grid").innerHTML = html;
+}
+
+// อัปเดตค่า Density เข้า Dropdown ของแต่ละกล่องทุกครั้งที่ข้อมูลเปลี่ยน
+function updateLayoutDensity() {
+  let pStats = {};
+  TARGET_PILES.forEach(p => pStats[p] = { sumAll:0, cAll:0, sumAcc:0, cAcc:0 });
+
+  allData.forEach(h => {
+      let p = h.pile;
+      if(!pStats[p]) return;
+      h.rawSamples.forEach(s => {
+          pStats[p].sumAll += s.den; pStats[p].cAll++;
+          if(!s.status.toLowerCase().includes("reject")) {
+              pStats[p].sumAcc += s.den; pStats[p].cAcc++;
+          }
+      });
+  });
+
+  TARGET_PILES.forEach(p => {
+      let vAll = pStats[p].cAll > 0 ? (pStats[p].sumAll / pStats[p].cAll) : 0;
+      let vAcc = pStats[p].cAcc > 0 ? (pStats[p].sumAcc / pStats[p].cAcc) : 0;
+
+      let sel = document.getElementById(`dt-${p}`);
+      if(sel) {
+          sel.dataset.acc = vAcc;
+          sel.dataset.all = vAll;
+          document.getElementById(`opt-acc-${p}`).textContent = `Accept: ${vAcc.toFixed(4)}`;
+          document.getElementById(`opt-all-${p}`).textContent = `All: ${vAll.toFixed(4)}`;
+          calcVol(p); // คำนวณอัปเดตอัตโนมัติ
+      }
+  });
+}
+
+// สูตรคำนวณ (Survey Volume x Density) และหาค่า Diff %
+window.calcVol = function(p) {
+  let bk = parseFloat(document.getElementById(`bk-${p}`).value);
+  let sv = parseFloat(document.getElementById(`sv-${p}`).value);
+  let sel = document.getElementById(`dt-${p}`);
+  let den = parseFloat(sel.value === 'acc' ? sel.dataset.acc : sel.dataset.all);
+
+  let stEl = document.getElementById(`st-${p}`);
+  let dfEl = document.getElementById(`df-${p}`);
+
+  if(isNaN(bk) || isNaN(sv) || isNaN(den) || bk === 0) {
+      stEl.textContent = "0.00";
+      dfEl.textContent = "0.00 %";
+      dfEl.style.color = "var(--text)";
+      return;
+  }
+
+  let surveyTons = sv * den;
+  let diff = ((surveyTons - bk) / bk) * 100;
+
+  stEl.textContent = surveyTons.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  
+  dfEl.textContent = (diff > 0 ? "+" : "") + diff.toFixed(2) + " %";
+  if (diff > 0) dfEl.style.color = "var(--accept)";
+  else if (diff < 0) dfEl.style.color = "var(--reject)";
+  else dfEl.style.color = "var(--text)";
+}
+
+// 🟢 Start App
+initLayoutCalcs(); // สร้างกล่องคำนวณก่อน
+window.onload = loadFromDB;
 </script>
 </body>
 </html>
