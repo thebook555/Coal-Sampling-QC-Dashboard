@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BLCP Sampling QC Dashboard V15 (Time Calculator & Pro Stats)</title>
+<title>BLCP Sampling QC Dashboard V16 (Minimize Boxes)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -67,6 +67,21 @@
   .upload-sub { font-size: 12px; color: var(--muted); }
   .upload-btn { margin-left: auto; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s;}
   .upload-btn:hover { opacity: .85; }
+
+  /* 🟢 CSS สำหรับกล่องและปุ่ม Minimize */
+  .minimizable { position: relative; transition: all 0.3s ease; }
+  .min-btn { position: absolute; top: 16px; right: 16px; background: var(--bg3); border: 1px solid var(--border2); color: var(--muted); border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; transition: all 0.2s; z-index: 10; }
+  .min-btn:hover { background: var(--surface); color: var(--text); border-color: var(--muted); }
+  
+  /* ซ่อนทุกอย่างยกเว้น Title และปุ่ม Min-btn เมื่อย่อกล่อง */
+  .is-minimized > *:not(.chart-title):not(.prog-title-sm):not(.stat-box-title):not(.calc-title):not(.min-btn) { display: none !important; }
+  .is-minimized { padding-bottom: 16px !important; min-height: 0 !important; height: auto !important; }
+  
+  /* เอาเส้นคั่นออกเมื่อย่อกล่อง */
+  .is-minimized .chart-title, .is-minimized .prog-title-sm, .is-minimized .stat-box-title, .is-minimized .calc-title { border-bottom: none !important; margin-bottom: 0 !important; padding-bottom: 0 !important; }
+  
+  /* เว้นที่ให้ปุ่ม Minimize จะได้ไม่ทับตัวหนังสือ */
+  .chart-title, .stat-box-title, .calc-title { padding-right: 36px; }
 
   /* Progress Grid */
   .progress-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
@@ -214,7 +229,8 @@
 
         <div class="progress-grid" id="progress-container"></div>
 
-        <div class="chart-box-wide" style="margin-bottom: 28px;">
+        <div class="chart-box-wide minimizable" style="margin-bottom: 28px;">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="chart-title" style="font-size: 16px; color: var(--accent);">⏱️ Drilling Time & Target Calculator</div>
           <div class="chart-sub">คำนวณวันทำงานและเป้าหมายความลึกที่ต้องเจาะต่อวัน (อ้างอิงจาก Remaining Depth ของแต่ละกอง)</div>
           
@@ -237,8 +253,8 @@
             </div>
 
             <div class="calc-box" style="padding: 16px;">
-               <div class="calc-row"><span>Start Date</span> <input type="date" id="time-start" class="calc-input" onchange="calcDrillTime()"></div>
-               <div class="calc-row"><span>End Date</span> <input type="date" id="time-end" class="calc-input" onchange="calcDrillTime()"></div>
+               <div class="calc-row"><span>Start Date</span> <input type="date" id="time-start" class="calc-input" onclick="this.showPicker()" onchange="calcDrillTime()" style="cursor: pointer;"></div>
+               <div class="calc-row"><span>End Date</span> <input type="date" id="time-end" class="calc-input" onclick="this.showPicker()" onchange="calcDrillTime()" style="cursor: pointer;"></div>
                <div class="calc-row"><span>Working Hours/Day</span> <input type="number" id="time-hrs" class="calc-input" placeholder="e.g. 8" value="8" oninput="calcDrillTime()"></div>
                <div class="calc-row" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                  <span style="color:var(--warning); font-weight:600;">Day Remaining</span> <span id="time-days" class="calc-res" style="color:var(--warning);">0 Days</span>
@@ -305,12 +321,14 @@
         <div class="stat-grid" id="stat-grid"></div>
 
         <div class="charts-row">
-          <div class="chart-box">
+          <div class="chart-box minimizable">
+            <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
             <div class="chart-title">Trend: Accept Rate (Yield)</div>
             <div class="chart-sub">% of accepted SAMPLES over time</div>
             <div style="position:relative;height:240px"><canvas id="trend-chart"></canvas></div>
           </div>
-          <div class="chart-box">
+          <div class="chart-box minimizable">
+            <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
             <div class="chart-title">Status Overview</div>
             <div class="chart-sub">Accept vs Reject samples by date</div>
             <div style="position:relative;height:240px"><canvas id="status-chart"></canvas></div>
@@ -318,12 +336,14 @@
         </div>
 
         <div class="charts-row">
-          <div class="chart-box">
+          <div class="chart-box minimizable">
+            <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
             <div class="chart-title" id="corr-title">Correlation: Depth vs Density</div>
             <div class="chart-sub">Does depth affect density? (Based on filtered samples)</div>
             <div style="position:relative;height:240px"><canvas id="scatter-chart"></canvas></div>
           </div>
-          <div class="chart-box">
+          <div class="chart-box minimizable">
+            <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
             <div class="chart-title" id="corr-weight-title">Correlation: Depth vs Weight</div>
             <div class="chart-sub">Does depth affect total weight? (Based on filtered samples)</div>
             <div style="position:relative;height:240px"><canvas id="weight-corr-chart"></canvas></div>
@@ -331,14 +351,16 @@
         </div>
         
         <div class="charts-row">
-          <div class="chart-box">
+          <div class="chart-box minimizable">
+            <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
             <div class="chart-title">Data Distribution: Density</div>
             <div class="chart-sub">Histogram of sample densities</div>
             <div style="position:relative;height:240px"><canvas id="hist-chart"></canvas></div>
           </div>
         </div>
 
-        <div class="chart-box-wide" style="margin-bottom: 24px;">
+        <div class="chart-box-wide minimizable" style="margin-bottom: 24px;">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="chart-title">Weight Distribution (Total weight per hole)</div>
           <div class="chart-sub">Check for missing weight outside the warning lines (±1 SD)</div>
           <div style="position:relative;height:260px;width:100%"><canvas id="weight-chart"></canvas></div>
@@ -348,13 +370,15 @@
           </div>
         </div>
 
-        <div class="chart-box-wide">
+        <div class="chart-box-wide minimizable">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="chart-title">Moisture by Hole</div>
           <div class="chart-sub">Average Total Moisture (%) per hole</div>
           <div style="position:relative;height:260px;width:100%"><canvas id="moisture-chart"></canvas></div>
         </div>
 
-        <div class="chart-box-wide">
+        <div class="chart-box-wide minimizable">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="chart-title">Density by Hole (Average of valid samples)</div>
           <div class="chart-sub">Check for outliers outside the warning lines (±1 SD)</div>
           <div id="density-wrap" style="position:relative;width:100%"><canvas id="density-chart"></canvas></div>
@@ -410,7 +434,7 @@
         </div>
 
       </main>
-      <div class="footer">BLCP Sampling QC Dashboard V15 · Advanced Stockpile & Time Calc</div>
+      <div class="footer">BLCP Sampling QC Dashboard V16 · Minimized Boxes Supported</div>
     </div> <div id="view-layout" class="view-section">
       <main class="main">
         <div class="upload-zone" id="layout-dropzone" style="margin-bottom: 24px;">
@@ -423,7 +447,8 @@
           <input type="file" id="layout-file-input" accept="image/png, image/jpeg, image/jpg" style="display:none">
         </div>
 
-        <div class="chart-box-wide">
+        <div class="chart-box-wide minimizable">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="chart-title" style="font-size: 18px;">Layout Stockpile</div>
           <div class="chart-sub">แผนผังแสดงจุดกองถ่านหิน (อัปเดตแบบ Real-time)</div>
           
@@ -442,8 +467,15 @@
         <div class="calc-grid" id="calc-grid"></div>
 
       </main>
-      <div class="footer">BLCP Sampling QC Dashboard V15</div>
+      <div class="footer">BLCP Sampling QC Dashboard V16</div>
     </div> </div> </div> <script>
+// 🟢 0. ฟังก์ชันสลับ Minimize Box
+window.toggleMin = function(btn) {
+    const box = btn.parentElement;
+    box.classList.toggle('is-minimized');
+    btn.innerHTML = box.classList.contains('is-minimized') ? '➕' : '➖';
+}
+
 // --- UI Layout Functions ---
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
 function switchTab(tabName, event) {
@@ -490,8 +522,7 @@ let weightMinF = "", weightMaxF = "";
 let selectedHole = null;
 let curPage = 1, rowsPerPage = 10, sortCol = "", sortDesc = false;
 
-// 🟢 ตัวแปรไว้จำค่า Remaining Depth เพื่อส่งไปหน้า Time Calculator
-window.globalRemainDepths = {};
+window.globalRemainDepths = {}; 
 
 let chartDensity = null, chartSample = null, chartTrend = null, chartScatter = null;
 let chartHist = null, chartStatus = null, chartWeight = null, chartMoisture = null, chartWeightCorr = null; 
@@ -671,7 +702,7 @@ function calcCorrelation(arr, keyX, keyY) {
 const gc = id => document.getElementById(id).getContext("2d");
 const GRID = "rgba(255,255,255,0.05)", TICK = "#7a8099";
 
-// 🟢 1. อัปเดต Progress Boxes
+// 🟢 อัปเดต Progress Boxes
 function renderProgress() {
   let s = { 
     'Overall (without Bedding)': {t:0, a:0}, 
@@ -689,7 +720,7 @@ function renderProgress() {
   
   const tg = { 'Overall (without Bedding)': 1550, A1: 404, A2: 0, A3: 0, B1: 0, B2: 0, B3: 0, CD1: 286, CD2: 392, CD3: 0, CD4: 468 };
   let html = '';
-  window.globalRemainDepths = {}; // เคลียร์ค่าตัวแปรกลาง
+  window.globalRemainDepths = {}; 
 
   for(let k in tg) {
       let pt = tg[k] > 0 ? Math.min((s[k].t / tg[k])*100, 100).toFixed(1) : (s[k].t > 0 ? "100.0" : "0.0");
@@ -699,12 +730,12 @@ function renderProgress() {
       let targetDepth = (tg[k] / 2).toFixed(1);
       let remainDepth = (remain / 2).toFixed(1);
       
-      // บันทึกค่าลงตัวแปรกลาง เพื่อนำไปใช้ใน Time Calculator
       window.globalRemainDepths[k] = parseFloat(remainDepth);
 
       html += `
-      <div class="prog-card-sm">
-        <div class="prog-title-sm" style="align-items: flex-start;">
+      <div class="prog-card-sm minimizable">
+        <button class="min-btn" style="top: 12px; right: 12px;" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
+        <div class="prog-title-sm" style="align-items: flex-start; padding-right: 32px;">
           <span style="padding-top: 2px;">${k} Progress</span> 
           <div style="text-align: right; line-height: 1.4;">
             <div style="color:var(--muted); font-size:11px;">Target: ${tg[k]}</div>
@@ -733,7 +764,6 @@ function renderProgress() {
   document.getElementById("progress-container").innerHTML = html;
 }
 
-// 🟢 2. ฟังก์ชันคำนวณ Time & Target Depth (อัปเดตนับจาก Today)
 window.calcDrillTime = function() {
    const target = document.getElementById('time-target-sel').value;
    const depth = window.globalRemainDepths[target] || 0;
@@ -742,18 +772,14 @@ window.calcDrillTime = function() {
    const end = new Date(document.getElementById('time-end').value);
    const hrs = parseFloat(document.getElementById('time-hrs').value) || 0;
 
-   // 🟢 ดึงข้อมูล "วันนี้" และตั้งเวลาเป็นเที่ยงคืนตรงเพื่อให้ลบวันได้เป๊ะ
    const today = new Date();
    today.setHours(0, 0, 0, 0); 
 
    let days = 0;
    if (!isNaN(end.getTime())) {
-       // ปรับ End Date ให้เป็นเวลาเที่ยงคืนตรงเช่นกัน
        const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate());
        const diffTime = endMidnight - today;
-       
        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-       // ถ้านับรวมวันนี้ด้วย (Inclusive) ให้บวก 1, ถ้าเลยวันไปแล้วให้เป็น 0
        days = days >= 0 ? days + 1 : 0; 
    }
    
@@ -768,7 +794,6 @@ window.calcDrillTime = function() {
    document.getElementById('time-target-day').textContent = targetPerDay.toFixed(2) + " m";
    document.getElementById('time-target-hr').textContent = targetPerHr.toFixed(2) + " m";
 }
-
 
 function renderSummary(f) {
   let totalAcc = 0, totalRej = 0;
@@ -832,7 +857,8 @@ function renderSummary(f) {
   const dsSample = calcStats(allSamples, "den"); 
 
   document.getElementById("stat-grid").innerHTML = `
-    <div class="stat-box">
+    <div class="stat-box minimizable">
+      <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
       <div class="stat-box-title">Density (MT/m³)</div>
       <div class="stat-row"><span class="stat-key">Average (Overall)</span><span class="stat-val">${dsSample.avg}</span></div>
       <div class="stat-row" style="margin-top: 6px;"><span class="stat-key" style="color:var(--muted)">SD (by Sample)</span><span class="stat-val">${dsSample.sd}</span></div>
@@ -843,7 +869,8 @@ function renderSummary(f) {
       <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${dsSample.max}</span></div>
     </div>
     
-    <div class="stat-box">
+    <div class="stat-box minimizable">
+      <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
       <div class="stat-box-title">Filtered Weight/Hole (kg)</div>
       <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${wsHole.avg}</span></div>
       <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${wsHole.sd}</span></div>
@@ -852,7 +879,8 @@ function renderSummary(f) {
       <div class="stat-row"><span class="stat-key">Max</span><span class="stat-val">${wsHole.max}</span></div>
     </div>
     
-    <div class="stat-box">
+    <div class="stat-box minimizable">
+      <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
       <div class="stat-box-title">Filtered Max Depth (m)</div>
       <div class="stat-row"><span class="stat-key">Average</span><span class="stat-val">${lsHole.avg}</span></div>
       <div class="stat-row"><span class="stat-key">Std Deviation</span><span class="stat-val">${lsHole.sd}</span></div>
@@ -1056,7 +1084,7 @@ window.removeHole = function(h) { holeF = holeF.filter(x => x !== h); updateHole
 function render() {
   const f = getFiltered(); 
   renderProgress(); 
-  calcDrillTime(); // 🟢 สั่งอัปเดต Time Calculator
+  calcDrillTime();
   renderSummary(f); 
   renderCharts(f); 
   renderTable(f);
@@ -1172,7 +1200,8 @@ function initLayoutCalcs() {
   let html = '';
   TARGET_PILES.forEach(p => {
       html += `
-      <div class="calc-box">
+      <div class="calc-box minimizable">
+          <button class="min-btn" onclick="toggleMin(this)" title="ย่อ/ขยายกล่อง">➖</button>
           <div class="calc-title">Pile ${p}</div>
           <div class="calc-row"><span>Book Value (tons)</span> <input type="number" id="bk-${p}" class="calc-input" placeholder="User input" oninput="calcVol('${p}')"></div>
           <div class="calc-row"><span>Survey Volume (m³)</span> <input type="number" id="sv-${p}" class="calc-input" placeholder="User input" oninput="calcVol('${p}')"></div>
