@@ -1290,7 +1290,10 @@ initLayoutCalcs();
 let syncInterval = null;
 let lastModifiedMap = {};
 
-document.getElementById("sync-folder-btn").addEventListener("click", async () => {
+// 🟢 เพิ่มตัวแปร e เข้ามา
+document.getElementById("sync-folder-btn").addEventListener("click", async (e) => {
+    e.stopPropagation(); // 👈 คำสั่งนี้จะช่วยบล็อกไม่ให้หน้าต่าง Upload ไฟล์ธรรมดาเด้งขึ้นมาซ้อนครับ!
+
     try {
         // ขอสิทธิ์เข้าถึงโฟลเดอร์จากเบราว์เซอร์
         const dirHandle = await window.showDirectoryPicker();
@@ -1309,8 +1312,8 @@ document.getElementById("sync-folder-btn").addEventListener("click", async () =>
             let hasChanges = false;
             
             for await (const entry of dirHandle.values()) {
-                // ตรวจสอบเฉพาะไฟล์ .xlsx และข้ามไฟล์ที่กำลังเปิดอยู่ (~$)
-                if (entry.kind === 'file' && entry.name.endsWith('.xlsx') && !entry.name.startsWith('~$')) {
+                // 🟢 แก้ไข: สั่งให้อ่านเฉพาะไฟล์ Excel ที่ชื่อไฟล์มีคำว่า "Drilling" เท่านั้น (จะข้ามไฟล์ Layout.xlsx ไปเลย)
+                if (entry.kind === 'file' && entry.name.includes('Drilling') && entry.name.endsWith('.xlsx') && !entry.name.startsWith('~$')) {
                     const file = await entry.getFile();
                     
                     // ถ้าเป็นไฟล์ใหม่ หรือมีการกด Save ใหม่ (เวลา Last Modified เปลี่ยน)
@@ -1320,9 +1323,9 @@ document.getElementById("sync-folder-btn").addEventListener("click", async () =>
                         
                         // อ่านและประมวลผลไฟล์อัตโนมัติ
                         const reader = new FileReader();
-                        reader.onload = e => {
+                        reader.onload = ev => {
                             try {
-                                const parsed = parseXLSX(new Uint8Array(e.target.result));
+                                const parsed = parseXLSX(new Uint8Array(ev.target.result));
                                 if (parsed && parsed.length > 0) {
                                     const newHoleNames = new Set(parsed.map(p => p.hole));
                                     allData = allData.filter(d => !newHoleNames.has(d.hole)).concat(parsed);
