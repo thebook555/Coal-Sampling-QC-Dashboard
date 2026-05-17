@@ -223,7 +223,10 @@
             <div class="upload-title">Update Dashboard Data</div>
             <div class="upload-sub">Drop your .xlsx file (Drilling Data) here to compile all sheets automatically</div>
           </div>
-          <button class="upload-btn" id="upload-btn">Upload File</button>
+          <div style="display: flex; gap: 10px; margin-left: auto;">
+            <button class="upload-btn" id="sync-folder-btn" style="background: var(--warning); color: #000;">🔄 Auto-Sync Folder</button>
+            <button class="upload-btn" id="upload-btn">Upload File</button>
+          </div>
           <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
         </div>
 
@@ -1280,7 +1283,70 @@ window.calcVol = function(p) {
 }
 
 // 🟢 Start App
-initLayoutCalcs(); 
+initLayoutCalcs();
+// ==========================================
+// 🟢 8. AUTO-SYNC FOLDER (ไม่ต้องลงโปรแกรม)
+// ==========================================
+let syncInterval = null;
+let lastModifiedMap = {};
+
+document.getElementById("sync-folder-btn").addEventListener("click", async () => {
+    try {
+        // ขอสิทธิ์เข้าถึงโฟลเดอร์จากเบราว์เซอร์
+        const dirHandle = await window.showDirectoryPicker();
+        
+        // เปลี่ยนหน้าตาปุ่มให้รู้ว่ากำลังทำงาน
+        const btn = document.getElementById("sync-folder-btn");
+        btn.innerHTML = "⏳ Syncing... (เปิดหน้านี้ทิ้งไว้)";
+        btn.style.background = "var(--accept)";
+        btn.style.color = "#fff";
+        
+        alert(`✅ เชื่อมต่อโฟลเดอร์ "${dirHandle.name}" สำเร็จ!\n\nระบบจะคอยดึงข้อมูลจากไฟล์ Excel ใหม่ๆ อัตโนมัติทุกๆ 5 วินาที\n(ข้อควรระวัง: ต้องเปิดหน้าเว็บนี้ทิ้งไว้ เพื่อให้ระบบทำงานได้ต่อเนื่องครับ)`);
+        
+        if (syncInterval) clearInterval(syncInterval);
+        
+        syncInterval = setInterval(async () => {
+            let hasChanges = false;
+            
+            for await (const entry of dirHandle.values()) {
+                // ตรวจสอบเฉพาะไฟล์ .xlsx และข้ามไฟล์ที่กำลังเปิดอยู่ (~$)
+                if (entry.kind === 'file' && entry.name.endsWith('.xlsx') && !entry.name.startsWith('~$')) {
+                    const file = await entry.getFile();
+                    
+                    // ถ้าเป็นไฟล์ใหม่ หรือมีการกด Save ใหม่ (เวลา Last Modified เปลี่ยน)
+                    if (!lastModifiedMap[entry.name] || lastModifiedMap[entry.name] !== file.lastModified) {
+                        lastModifiedMap[entry.name] = file.lastModified;
+                        hasChanges = true;
+                        
+                        // อ่านและประมวลผลไฟล์อัตโนมัติ
+                        const reader = new FileReader();
+                        reader.onload = e => {
+                            try {
+                                const parsed = parseXLSX(new Uint8Array(e.target.result));
+                                if (parsed && parsed.length > 0) {
+                                    const newHoleNames = new Set(parsed.map(p => p.hole));
+                                    allData = allData.filter(d => !newHoleNames.has(d.hole)).concat(parsed);
+                                    saveToDB(allData); // ส่งขึ้น Firebase อัตโนมัติ
+                                    
+                                    populateFilters(); 
+                                    render();
+                                }
+                            } catch(err) { console.error("Parse Error:", err); }
+                        };
+                        reader.readAsArrayBuffer(file);
+                    }
+                }
+            }
+            if(hasChanges) console.log("🔄 ข้อมูลอัปเดตอัตโนมัติเรียบร้อย!");
+        }, 5000); // เช็คโฟลเดอร์ทุกๆ 5 วินาที
+
+    } catch (error) {
+        console.error(error);
+        if (error.name !== 'AbortError') {
+            alert("❌ เบราว์เซอร์นี้ไม่รองรับการอ่านโฟลเดอร์อัตโนมัติ (แนะนำให้ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์ครับ)");
+        }
+    }
+}); 
 window.onload = loadFromDB;
 </script>
 </body>
